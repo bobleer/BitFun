@@ -34,7 +34,6 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   const activeSession = useActiveSession();
 
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const isAtBottomRef = useRef(true);
 
   const scrollerElementRef = useRef<HTMLElement | null>(null);
 
@@ -150,19 +149,16 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     scrollToBottom,
   }), [scrollToTurn, scrollToIndex, scrollToBottom]);
 
-  // ── Core scroll policy: processing + at bottom → auto-scroll ────────
-  // When processing starts and user is at bottom, auto-scroll.
-  // If user scrolls away from bottom, stop auto-scrolling immediately.
-  // When processing starts again (new turn), re-enable if user is at bottom.
+  // ── Core scroll policy: processing → auto-scroll to bottom ────────────
   useEffect(() => {
     if (!isProcessing) return;
 
-    if (isAtBottomRef.current && virtuosoRef.current) {
+    if (virtuosoRef.current) {
       virtuosoRef.current.scrollTo({ top: 999999999, behavior: 'smooth' });
     }
 
     const intervalId = setInterval(() => {
-      if (isAtBottomRef.current && virtuosoRef.current) {
+      if (virtuosoRef.current) {
         virtuosoRef.current.scrollTo({ top: 999999999, behavior: 'smooth' });
       }
     }, 300);
@@ -171,11 +167,10 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [isProcessing]);
 
   const handleFollowOutput = useCallback(() => {
-    return (isProcessing && isAtBottomRef.current) ? 'smooth' as const : false;
+    return isProcessing ? 'smooth' as const : false;
   }, [isProcessing]);
 
   const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
-    isAtBottomRef.current = atBottom;
     setIsAtBottom(atBottom);
   }, []);
 
@@ -322,7 +317,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       />
 
       <ScrollToLatestBar
-        visible={!isAtBottom && virtualItems.length > 0}
+        visible={!isAtBottom && !isProcessing && virtualItems.length > 0}
         onClick={scrollToBottom}
         isInputActive={isInputActive}
         isInputExpanded={isInputExpanded}
