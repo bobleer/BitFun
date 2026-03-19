@@ -461,33 +461,33 @@
   display: inline-flex;
   align-items: center;
   padding: 3px;
-  background: $element-bg-subtle;
-  border-radius: 16px;
+  background: $element-bg-base;
+  border: 1px solid $border-subtle;
+  border-radius: 20px;
 }
 
 .bitfun-remote-connect__mode-btn {
-  padding: 4px 10px;
+  padding: 5px 14px;
   font-size: $font-size-xs;
   font-weight: $font-weight-medium;
   color: $color-text-muted;
   background: transparent;
   border: none;
-  border-radius: 13px;
+  border-radius: 17px;
   cursor: pointer;
   transition: all $motion-fast $easing-standard;
 
-  &:hover:not(:disabled):not(.is-active) {
-    color: $color-text-secondary;
-  }
-
-  &:disabled {
-    cursor: default;
+  &:hover:not(.is-active) {
+    color: $color-text-primary;
+    background: $element-bg-subtle;
   }
 
   &.is-active {
-    color: #ffffff;
+    color: #fff;
     background: $color-success;
-    font-weight: $font-weight-medium;
+    font-weight: $font-weight-semibold;
+    box-shadow: 0 1px 4px rgba(110, 184, 140, 0.35);
+    cursor: default;
   }
 
   &:focus-visible {
