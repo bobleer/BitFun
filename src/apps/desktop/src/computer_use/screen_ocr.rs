@@ -555,13 +555,13 @@ mod macos {
 mod windows_backend {
     use super::{
         filter_and_rank, image_box_to_global_match, image_content_rect_or_full, normalize_for_match,
+        OcrTextMatch,
     };
     use bitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
     use bitfun_core::util::errors::{BitFunError, BitFunResult};
     use windows::core::HSTRING;
-    use windows::Foundation::IAsyncOperation;
-    use windows::Graphics::Imaging::{BitmapDecoder, SoftwareBitmap};
-    use windows::Media::Ocr::{OcrEngine, OcrLine, OcrWord};
+    use windows::Graphics::Imaging::BitmapDecoder;
+    use windows::Media::Ocr::{OcrEngine, OcrWord};
     use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
     use windows::Win32::System::Com::{
         CoIncrementMTAUsage, CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED,
@@ -584,22 +584,20 @@ mod windows_backend {
         // This must run on a thread initialized with COINIT_APARTMENTTHREADED
         // Windows.Media.Ocr requires STA thread
         let mut co_init = None;
-        if let Err(_) = windows::Win32::System::Com::CoIncrementMTAUsage() {
-            match unsafe {
-                windows::Win32::System::Com::CoInitializeEx(
+        if unsafe { CoIncrementMTAUsage() }.is_err() {
+            let hr = unsafe {
+                CoInitializeEx(
                     None,
-                    windows::Win32::System::Com::COINIT_APARTMENTTHREADED
-                        | windows::Win32::System::Com::COINIT_DISABLE_OLE1DDE,
+                    COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE,
                 )
-            } {
-                Ok(_) => co_init = Some(()),
-                Err(e) => {
-                    return Err(BitFunError::tool(format!(
-                        "Windows OCR COM initialization failed: {}",
-                        e
-                    )));
-                }
+            };
+            if hr.is_err() {
+                return Err(BitFunError::tool(format!(
+                    "Windows OCR COM initialization failed: {:?}",
+                    hr
+                )));
             }
+            co_init = Some(());
         }
 
         let result = (|| -> BitFunResult<Vec<OcrTextMatch>> {
@@ -633,11 +631,12 @@ mod windows_backend {
             // 4. Run OCR recognition
             let ocr_result = engine.RecognizeAsync(&software_bitmap)?.get()?;
             let lines = ocr_result.Lines()?;
+            let line_count = lines.Size()?;
 
             let mut raw_matches = Vec::new();
-            for line in lines {
+            for line in &lines {
                 let words = line.Words()?;
-                for word in words {
+                for word in &words {
                     if let Some(m) = ocr_word_to_match(
                         shot,
                         text_query,
@@ -657,7 +656,7 @@ mod windows_backend {
                 return Err(BitFunError::tool(format!(
                     "No OCR text matched {:?} on screen (Windows OCR found {} text regions total).",
                     text_query,
-                    lines.len()
+                    line_count
                 )));
             }
             Ok(ranked)
@@ -665,7 +664,7 @@ mod windows_backend {
 
         // Uninitialize COM if we initialized it
         if co_init.is_some() {
-            unsafe { windows::Win32::System::Com::CoUninitialize() };
+            unsafe { CoUninitialize() };
         }
 
         result
@@ -689,10 +688,10 @@ mod windows_backend {
 
         // Windows OCR returns bounding rect in pixels, top-left origin, within the image
         let rect = word.BoundingRect().ok()?;
-        let local_left = content_left as f64 + rect.X;
-        let local_top = content_top as f64 + rect.Y;
-        let width = rect.Width;
-        let height = rect.Height;
+        let local_left = content_left as f64 + f64::from(rect.X);
+        let local_top = content_top as f64 + f64::from(rect.Y);
+        let width = f64::from(rect.Width);
+        let height = f64::from(rect.Height);
 
         Some(image_box_to_global_match(
             shot,
@@ -713,11 +712,11 @@ mod windows_backend {
 mod linux_backend {
     use super::{
         filter_and_rank, image_box_to_global_match, image_content_rect_or_full, normalize_for_match,
+        OcrTextMatch,
     };
     use bitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
     use bitfun_core::util::errors::{BitFunError, BitFunResult};
     use leptess::{leptonica, tesseract::TessApi};
-    use std::ffi::CString;
 
     pub fn find_text_matches(
         shot: &ComputerScreenshot,
