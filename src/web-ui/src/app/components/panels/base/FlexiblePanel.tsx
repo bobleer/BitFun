@@ -1,4 +1,4 @@
-import React, { useCallback, memo, useMemo } from 'react';
+import React, { useCallback, memo } from 'react';
 import { Download, Copy, X, AlertCircle } from 'lucide-react';
 import { MarkdownRenderer, IconButton } from '@/component-library';
 import { CodeEditor, MarkdownEditor, ImageViewer, DiffEditor } from '@/tools/editor';
@@ -7,42 +7,6 @@ import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';
 
 const log = createLogger('FlexiblePanel');
-
-// Stable lazy components at module level to avoid re-creation on each render
-const MermaidPanel = React.lazy(() => 
-  import('@/tools/mermaid-editor/components').then(module => ({ default: module.MermaidPanel }))
-);
-
-const MermaidEditor = React.lazy(() => 
-  import('@/tools/mermaid-editor/components').then(module => ({ default: module.MermaidEditor }))
-);
-
-const MermaidErrorBoundary = React.lazy(() => 
-  import('@/tools/mermaid-editor/components').then(module => ({ default: module.MermaidErrorBoundary }))
-);
-
-const GitDiffView = React.lazy(() => 
-  import('@/tools/git/components/GitDiffView/GitDiffView')
-);
-
-const GitSettingsView = React.lazy(() => 
-  import('@/tools/git/components/GitSettingsView/GitSettingsView')
-);
-
-// Directly imported (not lazy-loaded) to avoid loading delay in frequently used Git panel
-import { GitDiffEditor } from '@/tools/git/components/GitDiffEditor/GitDiffEditor';
-
-const GitGraphView = React.lazy(() => 
-  import('@/tools/git/components/GitGraphView/GitGraphView').then(module => ({ 
-    default: module.GitGraphView 
-  }))
-);
-
-const GitBranchHistoryView = React.lazy(() =>
-  import('@/tools/git/components/GitBranchHistoryView/GitBranchHistoryView').then(module => ({
-    default: module.GitBranchHistoryView
-  }))
-);
 
 // Plan viewer component
 const PlanViewer = React.lazy(() => 
@@ -56,10 +20,6 @@ const TerminalTabPanel = React.lazy(() =>
   import('@/tools/terminal').then(module => ({ 
     default: module.ConnectedTerminal 
   }))
-);
-
-const BrowserPanel = React.lazy(() =>
-  import('@/app/scenes/browser/BrowserPanel')
 );
 
 const TaskDetailPanel = React.lazy(() => 
@@ -185,46 +145,6 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
     URL.revokeObjectURL(url);
   }, [content]);
 
-  const mermaidEditorProps = useMemo(() => {
-    if (content?.type !== 'mermaid-editor') return null;
-    
-    const mermaidData = content.data || {};
-    return {
-      initialSourceCode: mermaidData.sourceCode || t('flexiblePanel.fallback.mermaidDefaultCode'),
-      onSave: async (sourceCode: string) => {
-        if (onContentChange) {
-          onContentChange({
-            ...content,
-            data: {
-              ...mermaidData,
-              sourceCode
-            }
-          });
-        }
-        
-        if (onDirtyStateChange) {
-          onDirtyStateChange(false);
-        }
-        
-        if (onInteraction) {
-          await onInteraction('save', JSON.stringify({
-            sourceCode,
-            filePath: mermaidData.filePath
-          }));
-        }
-      },
-      onExport: async (format: string, data: string) => {
-        if (onInteraction) {
-          await onInteraction('export', JSON.stringify({
-            format,
-            data,
-            fileName: content.title
-          }));
-        }
-      }
-    };
-  }, [content, onContentChange, onDirtyStateChange, onInteraction, t]);
-
   const renderContent = () => {
     if (!content || content.type === 'empty') {
       return (
@@ -298,99 +218,6 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             )}
           </div>
         );
-      }
-
-
-      case 'mermaid-editor': {
-        const mermaidData = content.data || {};
-        
-        if (mermaidData.mode || mermaidData.interactive_config || mermaidData.mermaid_code) {
-          return (
-            <div className="bitfun-flexible-panel__mermaid-container">
-            <React.Suspense fallback={<div>{t('flexiblePanel.loading.mermaidPanel')}</div>}>
-              <MermaidErrorBoundary>
-                <MermaidPanel
-                  data={{
-                    mermaid_code: mermaidData.mermaid_code || mermaidData.sourceCode || t('flexiblePanel.fallback.mermaidDefaultCode'),
-                    title: content.title || t('flexiblePanel.fallback.mermaidChartTitle'),
-                    session_id: mermaidData.session_id,
-                    mode: mermaidData.mode || 'editor',
-                    allow_mode_switch: mermaidData.allow_mode_switch !== false,
-                    editor_config: mermaidData.editor_config,
-                    interactive_config: mermaidData.interactive_config
-                  }}
-                  onDataChange={(newData) => {
-                    if (onContentChange) {
-                      onContentChange({
-                        ...content,
-                        data: {
-                          ...mermaidData,
-                          ...newData
-                        }
-                      });
-                    }
-                    // Write back updated mermaid code to flowChatStore and persist to disk.
-                    const source = mermaidData._source;
-                    if (source?.type === 'tool-call' && source.toolCallId && newData.mermaid_code) {
-                      import('@/flow_chat/store/FlowChatStore').then(({ flowChatStore }) => {
-                        import('@/flow_chat/services/FlowChatManager').then(({ flowChatManager }) => {
-                          const state = flowChatStore.getState();
-                          const activeSessionId = state.activeSessionId;
-                          if (!activeSessionId) return;
-
-                          const session = state.sessions.get(activeSessionId);
-                          if (!session) return;
-
-                          for (const turn of session.dialogTurns) {
-                            for (const round of turn.modelRounds) {
-                              const item = round.items.find(
-                                (it: any) =>
-                                  it.type === 'tool' &&
-                                  (it.toolCall?.id === source.toolCallId || it.id === source.toolItemId)
-                              );
-                              if (item) {
-                                const toolItem = item as any;
-                                flowChatStore.updateModelRoundItem(activeSessionId, turn.id, toolItem.id, {
-                                  toolCall: {
-                                    ...toolItem.toolCall,
-                                    input: {
-                                      ...toolItem.toolCall.input,
-                                      mermaid_code: newData.mermaid_code,
-                                    }
-                                  }
-                                } as any);
-                                flowChatManager.saveDialogTurn(activeSessionId, turn.id).catch(() => {});
-                                return;
-                              }
-                            }
-                          }
-                        });
-                      });
-                    }
-                  }}
-                  onInteraction={onInteraction}
-                />
-              </MermaidErrorBoundary>
-            </React.Suspense>
-            </div>
-          );
-        } else {
-          if (!mermaidEditorProps) return null;
-
-          return (
-            <div className="bitfun-flexible-panel__mermaid-container">
-            <React.Suspense fallback={<div>{t('flexiblePanel.loading.mermaidEditor')}</div>}>
-              <MermaidErrorBoundary>
-                <MermaidEditor
-                  initialSourceCode={mermaidEditorProps.initialSourceCode}
-                  onSave={mermaidEditorProps.onSave}
-                  onExport={mermaidEditorProps.onExport}
-                />
-              </MermaidErrorBoundary>
-            </React.Suspense>
-            </div>
-          );
-        }
       }
 
       case 'text-viewer':
@@ -520,45 +347,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         const modifiedCode = diffData.modifiedCode || originalCode;
         const diffFilePath = diffData.filePath;
         const diffMigrationContext = diffData.migrationContext;
-        const diffRepositoryPath = diffData.repositoryPath;
-        
+
         const diffViewerKey = `diff-${diffFilePath || 'unknown'}-${originalCode.length}-${modifiedCode.length}`;
-        
-        if (diffRepositoryPath && diffFilePath) {
-          return (
-            <GitDiffEditor
-              key={diffViewerKey}
-              originalContent={originalCode}
-              modifiedContent={modifiedCode}
-              filePath={diffFilePath}
-              repositoryPath={diffRepositoryPath}
-              onAcceptAll={() => {
-                diffMigrationContext?.onAcceptAll?.();
-                window.dispatchEvent(new CustomEvent('git-status-changed', {
-                  detail: { repositoryPath: diffRepositoryPath }
-                }));
-              }}
-              onRejectAll={() => {
-                diffMigrationContext?.onRejectAll?.();
-                window.dispatchEvent(new CustomEvent('git-status-changed', {
-                  detail: { repositoryPath: diffRepositoryPath }
-                }));
-              }}
-              onClose={() => {}}
-              onContentChange={(_newContent, hasChanges) => {
-                if (onDirtyStateChange) {
-                  onDirtyStateChange(hasChanges);
-                }
-              }}
-              onSave={() => {
-                if (onDirtyStateChange) {
-                  onDirtyStateChange(false);
-                }
-              }}
-            />
-          );
-        }
-        
+
         return (
           <DiffEditor
             key={diffViewerKey}
@@ -569,7 +360,6 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             revealLine={diffData.revealLine}
             readOnly={false}
             renderSideBySide={true}
-            enableLsp={true}
             onSave={async (content) => {
               try {
                 const targetWorkspacePath = workspacePath || diffMigrationContext?.workspacePath;
@@ -596,37 +386,13 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
       }
 
       case 'git-diff':
-        return (
-          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitDiff')}</div>}>
-            <GitDiffView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
-              sourceCommit={content.data?.sourceCommit}
-              targetCommit={content.data?.targetCommit}
-              filePath={content.data?.filePath}
-            />
-          </React.Suspense>
-        );
-
       case 'git-graph':
-        return (
-          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitGraph')}</div>}>
-            <GitGraphView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
-              maxCount={content.data?.maxCount}
-            />
-          </React.Suspense>
-        );
-
       case 'git-branch-history':
         return (
-          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitBranchHistory')}</div>}>
-            <GitBranchHistoryView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
-              branchName={content.data?.branchName || 'main'}
-              currentBranch={content.data?.currentBranch}
-              maxCount={content.data?.maxCount || 100}
-            />
-          </React.Suspense>
+          <div className="bitfun-flexible-panel__error-message">
+            <AlertCircle size={20} />
+            <p>{t('flexiblePanel.errors.gitPanelRemoved')}</p>
+          </div>
         );
 
       case 'ai-session':
@@ -682,13 +448,11 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
 
       case 'git-settings':
         return (
-          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitSettings')}</div>}>
-            <GitSettingsView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
-            />
-          </React.Suspense>
+          <div className="bitfun-flexible-panel__error-message">
+            <AlertCircle size={20} />
+            <p>{t('flexiblePanel.errors.gitPanelRemoved')}</p>
+          </div>
         );
-
 
       case 'task-detail': {
         const taskDetailData = content.data || {};
@@ -763,16 +527,6 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               childSessionId={content.data?.childSessionId}
               parentSessionId={content.data?.parentSessionId}
               workspacePath={content.data?.workspacePath || workspacePath}
-            />
-          </React.Suspense>
-        );
-
-      case 'browser':
-        return (
-          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.terminal')}</div>}>
-            <BrowserPanel
-              isActive={isActive}
-              initialUrl={content.data?.url}
             />
           </React.Suspense>
         );

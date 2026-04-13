@@ -2,7 +2,6 @@
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::agent_memory::build_workspace_agent_memory_prompt;
 use crate::service::ai_memory::AIMemoryManager;
-use crate::service::ai_rules::get_global_ai_rules_service;
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
@@ -18,7 +17,6 @@ const PLACEHOLDER_ENV_INFO: &str = "{ENV_INFO}";
 const PLACEHOLDER_PROJECT_LAYOUT: &str = "{PROJECT_LAYOUT}";
 // PROJECT_CONTEXT_FILES needs configuration parsing
 // const PLACEHOLDER_PROJECT_CONTEXT_FILES: &str = "{PROJECT_CONTEXT_FILES}";
-const PLACEHOLDER_RULES: &str = "{RULES}";
 const PLACEHOLDER_MEMORIES: &str = "{MEMORIES}";
 const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
@@ -244,35 +242,6 @@ The following are project documentation that describe the project's architecture
         }
     }
 
-    /// Load AI rules from disk and format as prompt
-    pub async fn load_ai_rules(&self) -> Option<String> {
-        let rules_service = match get_global_ai_rules_service().await {
-            Ok(service) => service,
-            Err(e) => {
-                warn!("Failed to get AIRulesService: {}", e);
-                return None;
-            }
-        };
-
-        let workspace_pathbuf = std::path::PathBuf::from(&self.context.workspace_path);
-        match rules_service
-            .build_system_prompt_for(Some(&workspace_pathbuf))
-            .await
-        {
-            Ok(prompt) => {
-                if prompt.is_empty() {
-                    None
-                } else {
-                    Some(prompt)
-                }
-            }
-            Err(e) => {
-                warn!("Failed to build AI rules system prompt: {}", e);
-                None
-            }
-        }
-    }
-
     /// Get visual mode instruction from user config
     ///
     /// Reads `app.ai_experience.enable_visual_mode` from global config.
@@ -292,7 +261,7 @@ The following are project documentation that describe the project's architecture
         if enabled {
             r"# Visualizing complex logic as you explain
 Use Mermaid diagrams to visualize complex logic, workflows, architectures, and data flows whenever it helps clarify the explanation.
-Prefer MermaidInteractive tool when available, otherwise output Mermaid code blocks directly.
+Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
 ".to_string()
         } else {
             String::new()
@@ -346,7 +315,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{PROJECT_CONTEXT_FILES}` - Project context files (AGENTS.md, CLAUDE.md, etc.)
     /// - `{AGENT_MEMORY}` - Agent memory instructions + auto-loaded memory index
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
-    /// - `{RULES}` - AI rules
     /// - `{MEMORIES}` - AI memories
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
     ///
@@ -455,12 +423,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
                 }
             };
             result = result.replace(PLACEHOLDER_AGENT_MEMORY, &agent_memory);
-        }
-
-        // Replace {RULES}
-        if result.contains(PLACEHOLDER_RULES) {
-            let rules = self.load_ai_rules().await.unwrap_or_default();
-            result = result.replace(PLACEHOLDER_RULES, &rules);
         }
 
         // Replace {MEMORIES}

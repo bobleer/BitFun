@@ -123,17 +123,11 @@ impl ToolRegistry {
         self.register_tool(Arc::new(ListMCPPromptsTool::new()));
         self.register_tool(Arc::new(GetMCPPromptTool::new()));
 
-        // Mermaid interactive chart tool
-        self.register_tool(Arc::new(MermaidInteractiveTool::new()));
-
         // GetFileDiff tool
         self.register_tool(Arc::new(GetFileDiffTool::new()));
 
         // Log tool
         self.register_tool(Arc::new(LogTool::new()));
-
-        // Git version control tool
-        self.register_tool(Arc::new(GitTool::new()));
 
         // CreatePlan tool
         self.register_tool(Arc::new(CreatePlanTool::new()));

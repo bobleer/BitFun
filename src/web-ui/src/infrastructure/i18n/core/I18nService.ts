@@ -47,17 +47,13 @@ import zhCNSettingsMcpTools from '../../../locales/zh-CN/settings/mcp-tools.json
 import zhCNSettingsBasics from '../../../locales/zh-CN/settings/basics.json';
 import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.json';
 import zhCNSettingsSessionConfig from '../../../locales/zh-CN/settings/session-config.json';
-import zhCNSettingsLsp from '../../../locales/zh-CN/settings/lsp.json';
 import zhCNSettingsDebug from '../../../locales/zh-CN/settings/debug.json';
 import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
 import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
-import zhCNSettingsAiRules from '../../../locales/zh-CN/settings/ai-rules.json';
 import zhCNSettingsAiMemory from '../../../locales/zh-CN/settings/ai-memory.json';
 import zhCNSettingsAiContext from '../../../locales/zh-CN/settings/ai-context.json';
 import zhCNSettingsAgents from '../../../locales/zh-CN/settings/agents.json';
 import zhCNSettingsDefaultModel from '../../../locales/zh-CN/settings/default-model.json';
-
-import zhCNMermaidEditor from '../../../locales/zh-CN/mermaid-editor.json';
 
 import enUSCommon from '../../../locales/en-US/common.json';
 import enUSFlowChat from '../../../locales/en-US/flow-chat.json';
@@ -83,17 +79,13 @@ import enUSSettingsMcpTools from '../../../locales/en-US/settings/mcp-tools.json
 import enUSSettingsBasics from '../../../locales/en-US/settings/basics.json';
 import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.json';
 import enUSSettingsSessionConfig from '../../../locales/en-US/settings/session-config.json';
-import enUSSettingsLsp from '../../../locales/en-US/settings/lsp.json';
 import enUSSettingsDebug from '../../../locales/en-US/settings/debug.json';
 import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
 import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
-import enUSSettingsAiRules from '../../../locales/en-US/settings/ai-rules.json';
 import enUSSettingsAiMemory from '../../../locales/en-US/settings/ai-memory.json';
 import enUSSettingsAiContext from '../../../locales/en-US/settings/ai-context.json';
 import enUSSettingsAgents from '../../../locales/en-US/settings/agents.json';
 import enUSSettingsDefaultModel from '../../../locales/en-US/settings/default-model.json';
-
-import enUSMermaidEditor from '../../../locales/en-US/mermaid-editor.json';
 
 import { createLogger } from '@/shared/utils/logger';
 
@@ -126,17 +118,13 @@ const resources = {
     'settings/basics': zhCNSettingsBasics,
     'settings/ai-features': zhCNSettingsAiFeatures,
     'settings/session-config': zhCNSettingsSessionConfig,
-    'settings/lsp': zhCNSettingsLsp,
     'settings/debug': zhCNSettingsDebug,
     'settings/editor': zhCNSettingsEditor,
     'settings/skills': zhCNSettingsSkills,
-    'settings/ai-rules': zhCNSettingsAiRules,
     'settings/ai-memory': zhCNSettingsAiMemory,
     'settings/ai-context': zhCNSettingsAiContext,
     'settings/agents': zhCNSettingsAgents,
     'settings/default-model': zhCNSettingsDefaultModel,
-    
-    'mermaid-editor': zhCNMermaidEditor,
   },
   'en-US': {
     common: enUSCommon,
@@ -163,17 +151,13 @@ const resources = {
     'settings/basics': enUSSettingsBasics,
     'settings/ai-features': enUSSettingsAiFeatures,
     'settings/session-config': enUSSettingsSessionConfig,
-    'settings/lsp': enUSSettingsLsp,
     'settings/debug': enUSSettingsDebug,
     'settings/editor': enUSSettingsEditor,
     'settings/skills': enUSSettingsSkills,
-    'settings/ai-rules': enUSSettingsAiRules,
     'settings/ai-memory': enUSSettingsAiMemory,
     'settings/ai-context': enUSSettingsAiContext,
     'settings/agents': enUSSettingsAgents,
     'settings/default-model': enUSSettingsDefaultModel,
-    
-    'mermaid-editor': enUSMermaidEditor,
   },
 };
 
@@ -222,17 +206,13 @@ export class I18nService {
           'settings/mcp-tools',
           'settings/basics',
           'settings/ai-features',
-          'settings/lsp',
           'settings/debug',
           'settings/editor',
           'settings/skills',
-          'settings/ai-rules',
           'settings/ai-memory',
           'settings/ai-context',
           'settings/agents',
           'settings/default-model',
-          
-          'mermaid-editor',
         ],
         interpolation: {
           escapeValue: false,

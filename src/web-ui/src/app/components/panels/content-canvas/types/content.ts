@@ -15,7 +15,6 @@ export const FILE_VIEWER_TYPES: PanelContentType[] = [
   'code-editor',
   'markdown-viewer',
   'markdown-editor',
-  'mermaid-editor',
   'text-viewer',
   'file-viewer',
   'image-viewer',
@@ -59,7 +58,7 @@ export interface CreateTabOptions {
  */
 export interface CreateTabEventDetail extends CreateTabOptions {
   /** App mode / target canvas */
-  mode?: 'agent' | 'project' | 'git';
+  mode?: 'agent' | 'project';
 }
 
 /**
@@ -70,8 +69,6 @@ export const TAB_EVENTS = {
   AGENT_CREATE_TAB: 'agent-create-tab',
   /** Create tab in project mode */
   PROJECT_CREATE_TAB: 'project-create-tab',
-  /** Create tab in Git scene canvas */
-  GIT_CREATE_TAB: 'git-create-tab',
   /** Expand right panel */
   EXPAND_RIGHT_PANEL: 'expand-right-panel',
 } as const;

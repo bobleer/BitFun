@@ -4,7 +4,7 @@ use super::prompt_builder::{PromptBuilder, PromptBuilderContext};
 use super::Agent;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
-use crate::service::lsp::project_detector::{ProjectDetector, ProjectInfo};
+use crate::service::project_detection::{ProjectDetector, ProjectInfo};
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
 use log::debug;
@@ -333,10 +333,6 @@ Below is a snapshot of the current workspace's file structure.
             ));
         }
 
-        if let Some(rules_prompt) = prompt_components.load_ai_rules().await {
-            prompt_list.push(rules_prompt);
-        }
-
         if let Some(memory_prompt) = prompt_components.load_ai_memories().await {
             prompt_list.push(memory_prompt);
         }
@@ -362,7 +358,6 @@ Below is a snapshot of the current workspace's file structure.
             "Glob".to_string(),
             "WebSearch".to_string(),
             "TodoWrite".to_string(),
-            "MermaidInteractive".to_string(),
             "Log".to_string(),
             "TerminalControl".to_string(),
             "ComputerUse".to_string(),
