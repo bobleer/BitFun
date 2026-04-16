@@ -1,9 +1,10 @@
 /**
  * AgenticOSWorkspace — two-layer scene container.
  *
- * Layout (top to bottom):
- *   SceneHeaderBar  (40px, always visible)
- *   content area    (flex:1)
+ * The top bar (UnifiedTopBar) now lives in WorkspaceBody above this component.
+ * This component owns only the content area:
+ *
+ *   content area  (flex:1)
  *     scene-slot[session]  — always mounted, CSS display:none when overlay active
  *     scene-slot[overlay]  — mounted on demand, CSS display:flex when active
  *
@@ -16,7 +17,6 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
 import { useDialogCompletionNotify } from '../hooks/useDialogCompletionNotify';
 import SessionScene from '../scenes/session/SessionScene';
-import SceneHeaderBar from './SceneHeaderBar';
 import OverlaySceneRenderer from './OverlaySceneRenderer';
 import './AgenticOSWorkspace.scss';
 
@@ -30,10 +30,6 @@ interface AgenticOSWorkspaceProps {
 
 const AgenticOSWorkspace: React.FC<AgenticOSWorkspaceProps> = ({
   isEntering = false,
-  onMinimize,
-  onMaximize,
-  onClose,
-  isMaximized = false,
 }) => {
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
   const { workspace: currentWorkspace } = useCurrentWorkspace();
@@ -43,15 +39,6 @@ const AgenticOSWorkspace: React.FC<AgenticOSWorkspaceProps> = ({
 
   return (
     <div className="agentic-os-workspace">
-      {/* Persistent scene header — same position as old SceneBar */}
-      <SceneHeaderBar
-        activeOverlay={activeOverlay}
-        onMinimize={onMinimize}
-        onMaximize={onMaximize}
-        onClose={onClose}
-        isMaximized={isMaximized}
-      />
-
       {/* Content area — single slot visible at a time, no stacking */}
       <div className="agentic-os-workspace__content">
 

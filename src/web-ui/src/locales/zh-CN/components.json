@@ -466,7 +466,8 @@
     },
     "searchPlaceholder": "搜索通知...",
     "filters": {
-      "all": "全部 ({{count}})"
+      "all": "全部 ({{count}})",
+      "placeholder": "分类"
     },
     "activeTasks": {
       "title": "正在进行的任务 ({{count}})"

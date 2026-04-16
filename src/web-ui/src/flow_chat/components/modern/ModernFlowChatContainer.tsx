@@ -4,11 +4,14 @@
  */
 
 import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
+import { useHeaderStore } from '@/app/stores/headerStore';
 import { VirtualMessageList, VirtualMessageListRef } from './VirtualMessageList';
 import { FlowChatHeader, type FlowChatHeaderTurnSummary } from './FlowChatHeader';
+import { FlowChatTurnListSidebar } from './FlowChatTurnListSidebar';
 import { WelcomePanel } from '../WelcomePanel';
 import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
@@ -23,7 +26,6 @@ import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurn
 import type { FlowChatConfig } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import { openDispatcherSession } from '@/flow_chat/services/openDispatcherSession';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -45,14 +47,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   onOpenVisualization,
   onSwitchToChatPanel,
 }) => {
+  const { t } = useTranslation('flow-chat');
   const virtualItems = useVirtualItems();
   const activeSession = useActiveSession();
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
+  const [turnListOpen, setTurnListOpen] = useState(false);
   const autoPinnedSessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
+  const turnListSidebarRef = useRef<HTMLElement | null>(null);
   const { workspacePath, assistantWorkspacesList } = useWorkspaceContext();
   const defaultAssistantWorkspace = useMemo(
     () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
@@ -148,6 +153,23 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }));
   }, [activeSession?.dialogTurns]);
 
+  const untitledTurnLabel = t('flowChatHeader.untitledTurn', {
+    defaultValue: 'Untitled turn',
+  });
+  const displayTurns = useMemo(
+    () =>
+      turnSummaries.map(turn => ({
+        ...turn,
+        title: turn.title.trim() || untitledTurnLabel,
+      })),
+    [turnSummaries, untitledTurnLabel],
+  );
+
+  const searchMatchedTurnIds = useMemo(
+    () => new Set(searchMatches.map(m => m.turnId)),
+    [searchMatches],
+  );
+
   const effectiveVisibleTurnInfo = useMemo<VisibleTurnInfo | null>(() => {
     if (!pendingHeaderTurnId) {
       return visibleTurnInfo;
@@ -237,6 +259,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     setPendingHeaderTurnId(accepted ? turnId : null);
   }, [turnSummaries]);
 
+  const handleTurnListSelect = useCallback(
+    (turnId: string) => {
+      handleJumpToTurn(turnId);
+    },
+    [handleJumpToTurn],
+  );
+
   const handleJumpToPreviousTurn = useCallback(() => {
     if (!effectiveVisibleTurnInfo || effectiveVisibleTurnInfo.turnIndex <= 1) return;
     const previousTurn = turnSummaries[effectiveVisibleTurnInfo.turnIndex - 2];
@@ -251,20 +280,22 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleJumpToTurn(nextTurn.turnId);
   }, [effectiveVisibleTurnInfo, handleJumpToTurn, turnSummaries]);
 
-  const isDispatcherSession =
-    activeSession?.mode === 'Dispatcher' || activeSession?.mode?.toLowerCase() === 'dispatcher';
-
-  const handleOpenAgenticOs = useCallback(async () => {
-    try {
-      await openDispatcherSession({
-        assistantWorkspace: defaultAssistantWorkspace
-          ? { rootPath: defaultAssistantWorkspace.rootPath, id: defaultAssistantWorkspace.id }
-          : null,
-      });
-    } catch {
-      /* ignore */
+  // Publish session context to UnifiedTopBar via headerStore so the unified
+  // back button and title can be rendered there.
+  const { setSessionContext, clearSessionContext } = useHeaderStore.getState();
+  useEffect(() => {
+    if (!activeSession) {
+      clearSessionContext();
+      return;
     }
-  }, [defaultAssistantWorkspace]);
+    setSessionContext({
+      mode: activeSession.mode ?? '',
+      workspacePath: activeSession.workspacePath,
+      assistantWorkspace: defaultAssistantWorkspace
+        ? { id: defaultAssistantWorkspace.id, rootPath: defaultAssistantWorkspace.rootPath }
+        : null,
+    });
+  }, [activeSession, defaultAssistantWorkspace, setSessionContext, clearSessionContext]);
 
   useShortcut(
     'chat.stopGeneration',
@@ -324,17 +355,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           currentUserMessage={effectiveVisibleTurnInfo?.userMessage ?? ''}
           visible={!!activeSession}
           sessionId={activeSession?.sessionId}
-          workspacePath={activeSession?.mode === 'Dispatcher' ? undefined : activeSession?.workspacePath}
-          agentType={activeSession?.mode}
-          sessionMode={activeSession?.mode}
           btwOrigin={btwOrigin}
           btwParentTitle={btwParentTitle}
           turns={turnSummaries}
           onJumpToTurn={handleJumpToTurn}
           onJumpToPreviousTurn={handleJumpToPreviousTurn}
           onJumpToNextTurn={handleJumpToNextTurn}
-          showBackToAgenticOs={!!activeSession && !isDispatcherSession}
-          onOpenAgenticOs={handleOpenAgenticOs}
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
           searchMatchCount={searchMatches.length}
@@ -343,28 +369,41 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onSearchPrev={handleSearchPrev}
           onSearchClose={clearSearch}
           searchOpenRequest={searchOpenRequest}
+          turnListOpen={turnListOpen}
+          onTurnListOpenChange={setTurnListOpen}
         />
 
-        <div className="modern-flowchat-container__messages">
-          {virtualItems.length === 0 ? (
-            <WelcomePanel
-              key={activeSession?.sessionId ?? 'welcome'}
-              sessionMode={activeSession?.mode}
-              workspacePath={activeSession?.workspacePath}
-              onQuickAction={(command) => {
-                window.dispatchEvent(new CustomEvent('fill-chat-input', {
-                  detail: { message: command }
-                }));
-              }}
-            />
-          ) : (
-            <VirtualMessageList
-              // Remount per session so Virtuoso does not reuse the previous
-              // viewport before the new session's auto-pin settles.
-              key={activeSession?.sessionId ?? 'virtual-message-list'}
-              ref={virtualListRef}
-            />
-          )}
+        <div className="modern-flowchat-container__body">
+          <div className="modern-flowchat-container__messages">
+            {virtualItems.length === 0 ? (
+              <WelcomePanel
+                key={activeSession?.sessionId ?? 'welcome'}
+                sessionMode={activeSession?.mode}
+                workspacePath={activeSession?.workspacePath}
+                onQuickAction={(command) => {
+                  window.dispatchEvent(new CustomEvent('fill-chat-input', {
+                    detail: { message: command }
+                  }));
+                }}
+              />
+            ) : (
+              <VirtualMessageList
+                // Remount per session so Virtuoso does not reuse the previous
+                // viewport before the new session's auto-pin settles.
+                key={activeSession?.sessionId ?? 'virtual-message-list'}
+                ref={virtualListRef}
+              />
+            )}
+          </div>
+          <FlowChatTurnListSidebar
+            ref={turnListSidebarRef}
+            open={turnListOpen && turnSummaries.length > 0}
+            turns={displayTurns}
+            currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
+            totalTurns={effectiveVisibleTurnInfo?.totalTurns ?? turnSummaries.length}
+            onSelectTurn={handleTurnListSelect}
+            searchMatchedTurnIds={searchQuery.trim().length > 0 ? searchMatchedTurnIds : undefined}
+          />
         </div>
       </div>
     </FlowChatContext.Provider>

@@ -2,7 +2,7 @@
  * navSceneStore — left-panel navigation mode (2-state toggle).
  *
  * Two visual states:
- *   - showSceneNav = false → MainNav (default sidebar)
+ *   - showSceneNav = false → no scene-specific sidebar nav
  *   - showSceneNav = true  → scene-specific nav identified by navSceneId
  *
  * navSceneId can be set from two sources:

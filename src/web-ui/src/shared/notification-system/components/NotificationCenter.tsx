@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { X, CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { Search, Modal } from '@/component-library';
+import { Search, Modal, Select } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -21,7 +21,22 @@ export const NotificationCenter: React.FC = () => {
     return [...allProgressNotifications, ...allLoadingNotifications];
   }, [allProgressNotifications, allLoadingNotifications]);
 
-  
+  const filterOptions = useMemo(
+    () => [
+      { value: 'all' as const, label: t('components:notificationCenter.filters.all', { count: history.length }) },
+      { value: 'success' as const, label: t('common:status.success') },
+      { value: 'error' as const, label: t('common:status.error') },
+      { value: 'warning' as const, label: t('common:status.warning') },
+      { value: 'info' as const, label: t('common:status.info') },
+    ],
+    [history.length, t]
+  );
+
+  const handleFilterChange = (value: string | number | (string | number)[]) => {
+    if (Array.isArray(value)) return;
+    setFilter(value as NotificationFilter);
+  };
+
   const handleClose = React.useCallback(() => {
     notificationService.toggleCenter(false);
   }, []);
@@ -359,42 +374,23 @@ export const NotificationCenter: React.FC = () => {
         </div>
 
         
-        <div className="notification-center__search">
+        <div className="notification-center__toolbar">
           <Search
+            className="notification-center__search-field"
             placeholder={t('components:notificationCenter.searchPlaceholder')}
             value={searchQuery}
             onChange={(val) => setSearchQuery(val)}
             clearable
             size="medium"
           />
-        </div>
-
-        
-        <div className="notification-center__filters">
-          <button
-            className={`notification-center__filter ${filter === 'all' ? 'is-active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            {t('components:notificationCenter.filters.all', { count: history.length })}
-          </button>
-          <button
-            className={`notification-center__filter ${filter === 'error' ? 'is-active' : ''}`}
-            onClick={() => setFilter('error')}
-          >
-            {t('common:status.error')}
-          </button>
-          <button
-            className={`notification-center__filter ${filter === 'warning' ? 'is-active' : ''}`}
-            onClick={() => setFilter('warning')}
-          >
-            {t('common:status.warning')}
-          </button>
-          <button
-            className={`notification-center__filter ${filter === 'info' ? 'is-active' : ''}`}
-            onClick={() => setFilter('info')}
-          >
-            {t('common:status.info')}
-          </button>
+          <Select
+            className="notification-center__filter-select"
+            size="small"
+            value={filter}
+            options={filterOptions}
+            onChange={handleFilterChange}
+            placeholder={t('components:notificationCenter.filters.placeholder')}
+          />
         </div>
 
         

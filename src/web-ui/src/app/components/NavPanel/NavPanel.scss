@@ -59,12 +59,12 @@ $_section-header-height: 24px;
     flex-direction: column;
     min-height: 0;
 
-    // ── MainNav layer ──
+    // ── Default sidebar layer (legacy; often unused — session list is in SessionCapsule) ──
     &--main {
       flex: 1 1 auto;
       transition: opacity 0.2s $easing-standard;
 
-      // Non-split scenes: hide MainNav instantly when scene nav opens
+      // Non-split scenes: hide default layer instantly when scene nav opens
       .is-scene:not(.is-split-open) & {
         opacity: 0;
         pointer-events: none;
@@ -96,7 +96,7 @@ $_section-header-height: 24px;
       }
 
       // Split-open scenes (file-viewer): clip-path reveal from anchor.
-      // The opaque background ensures revealed portions fully cover MainNav
+      // The opaque background ensures revealed portions fully cover the layer below
       // so departing items never bleed through.
       .is-split-open & {
         clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
@@ -1038,7 +1038,7 @@ $_section-header-height: 24px;
   &__items {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2;
+    padding: 2px 0;
     gap: 2px;
 
     // Multiple SessionsSection siblings: match vertical rhythm of __workspace-list (gap 0 + 2px row padding).
@@ -1056,7 +1056,7 @@ $_section-header-height: 24px;
   // ──────────────────────────────────────────────
   // Split-departure animation
   //
-  // When scene-nav opens, MainNav items & sections receive directional
+  // When scene-nav opens, default sidebar items & sections receive directional
   // classes based on their position relative to the anchor item:
   //   .is-departing-up     → items above anchor slide up + fade
   //   .is-departing-anchor → the anchor item itself (brief scale pulse)
@@ -1613,7 +1613,7 @@ $_section-header-height: 24px;
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
-  min-width: 148px;
+  min-width: 188px;
   padding: $size-gap-1;
   background: var(--color-bg-elevated, #1e1e22);
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
@@ -1625,6 +1625,110 @@ $_section-header-height: 24px;
 
   &.is-closing {
     animation: bitfun-footer-menu-out $motion-fast $easing-accelerate forwards;
+  }
+}
+
+// ── Footer menu: row layout (main action + inline icon button)
+.bitfun-nav-panel__footer-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: $size-radius-sm;
+  transition: background $motion-fast $easing-standard;
+
+  &:hover {
+    background: var(--element-bg-soft);
+
+    .bitfun-nav-panel__footer-menu-item--row-main {
+      background: transparent;
+      color: var(--color-text-primary);
+    }
+
+    .bitfun-nav-panel__footer-menu-item-inline-btn {
+      opacity: 1;
+    }
+  }
+}
+
+.bitfun-nav-panel__footer-menu-item--row-main {
+  flex: 1;
+  min-width: 0;
+
+  &:hover {
+    background: transparent;
+  }
+}
+
+.bitfun-nav-panel__footer-menu-item-inline-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 2px;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard,
+              background $motion-fast $easing-standard,
+              color $motion-fast $easing-standard;
+
+  &:hover {
+    background: var(--element-bg-medium);
+    color: var(--color-text-primary);
+    opacity: 1;
+  }
+}
+
+// ── Footer menu: expandable item with chevron
+.bitfun-nav-panel__footer-menu-item--expandable {
+  .bitfun-nav-panel__footer-menu-chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transform: rotate(-90deg);
+    transition: transform $motion-fast $easing-standard,
+                opacity $motion-fast $easing-standard;
+
+    &.is-open {
+      transform: rotate(0deg);
+      opacity: 0.8;
+    }
+  }
+}
+
+// ── Footer menu: sub-items (indented, collapsible)
+.bitfun-nav-panel__footer-menu-sublist {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.2s $easing-standard;
+
+  &.is-open {
+    grid-template-rows: 1fr;
+  }
+
+  > div {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.bitfun-nav-panel__footer-menu-item--sub {
+  padding-left: 24px;
+  height: 26px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+
+  &:hover:not(:disabled):not(.is-disabled) {
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
   }
 }
 
@@ -1805,20 +1909,6 @@ $_section-header-height: 24px;
   .bitfun-nav-panel__top-action-btn:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {
     transform: scale(1);
   }
-}
-
-// ── Nav workspace search ─────────────────────────
-
-.bitfun-nav-panel__brand-header {
-  display: flex;
-  flex-direction: column;
-  padding: 0 $size-gap-2 $size-gap-1;
-  flex-shrink: 0;
-}
-
-.bitfun-nav-panel__brand-search {
-  width: 100%;
-  min-width: 0;
 }
 
 // ── Top action strip ─────────────────────────────

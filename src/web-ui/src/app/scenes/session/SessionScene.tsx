@@ -75,7 +75,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   const calculateValidRightWidth = useCallback((newWidth: number): number => {
     if (!containerRef.current) return newWidth;
     const containerWidth = containerRef.current.offsetWidth;
-    // NavPanel (240px) is outside SessionScene — only account for resizer + min chat width
+    // SessionScene fills the full content width — only account for resizer + min chat width
     const reserved = PANEL_COMMON_CONFIG.RESIZER_WIDTH + PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH;
     const dynamicMax = containerWidth - reserved;
     const maxWidth = Math.min(RIGHT_PANEL_CONFIG.MAX_WIDTH, dynamicMax);

@@ -1,26 +1,24 @@
 /**
  * WorkspaceBody — main workspace container.
  *
- * Left-right layout:
- *   .nav-area   (240px, flex-column)
- *     NavBar        (32px — back/forward + drag + WindowControls)
- *     NavPanel      (flex:1 — navigation sidebar)
- *   .scene-area (flex:1, flex-column)
- *     AgenticOSWorkspace (flex:1 — base session + optional overlay)
+ * New full-width layout (top to bottom):
+ *   UnifiedTopBar  (40px, always visible, spans full width)
+ *   main-content   (flex:1, full width — SessionScene / OverlayScene)
+ *
+ * Floating layers rendered on top of main-content:
+ *   SessionCapsule  — vertical pill for session navigation
+ *   NotificationButton — bottom-right bell (opens NotificationCenter)
+ *   FloatingFileTree — currently disabled/commented out
  */
 
-import React, { useCallback, useState } from 'react';
-import { NavBar } from '../components/NavBar';
-import NavPanel from '../components/NavPanel/NavPanel';
-import PersistentFooterActions from '../components/NavPanel/components/PersistentFooterActions';
+import React from 'react';
 import AgenticOSWorkspace from '../overlay/AgenticOSWorkspace';
-import { useApp } from '../hooks/useApp';
+import UnifiedTopBar from '../components/UnifiedTopBar/UnifiedTopBar';
+import NotificationButton from '../components/TitleBar/NotificationButton';
+import SessionCapsule from '../components/SessionCapsule/SessionCapsule';
+import PersistentFooterActions from '../components/NavPanel/components/PersistentFooterActions';
+import { useOverlayStore } from '../stores/overlayStore';
 import './WorkspaceBody.scss';
-
-const NAV_DEFAULT_WIDTH = 240;
-const NAV_MIN_WIDTH = 240;
-const NAV_MAX_WIDTH = 480;
-const COLLAPSE_THRESHOLD = 64;
 
 interface WorkspaceBodyProps {
   className?: string;
@@ -43,93 +41,23 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   isMaximized = false,
   sceneOverlay,
 }) => {
-  const { state, toggleLeftPanel } = useApp();
-  const isNavCollapsed = state.layout.leftPanelCollapsed;
-  const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
-  const [isDividerHovered, setIsDividerHovered] = useState(false);
-
-  const handleDividerMouseEnter = useCallback(() => {
-    setIsDividerHovered(true);
-    document.body.classList.add('bitfun-divider-hovered');
-  }, []);
-
-  const handleDividerMouseLeave = useCallback(() => {
-    setIsDividerHovered(false);
-    document.body.classList.remove('bitfun-divider-hovered');
-  }, []);
-
-  const handleNavCollapseDragStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || isNavCollapsed) return;
-    event.preventDefault();
-
-    const startX = event.clientX;
-    const startWidth = navWidth;
-    let hasCollapsed = false;
-
-    document.body.classList.add('bitfun-is-dragging-nav-collapse');
-    document.body.classList.add('bitfun-is-resizing-nav');
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (hasCollapsed) return;
-      const deltaX = moveEvent.clientX - startX;
-      const rawWidth = startWidth + deltaX;
-
-      if (rawWidth <= NAV_MIN_WIDTH - COLLAPSE_THRESHOLD) {
-        hasCollapsed = true;
-        toggleLeftPanel();
-        cleanup();
-        return;
-      }
-      const newWidth = Math.min(NAV_MAX_WIDTH, Math.max(NAV_MIN_WIDTH, rawWidth));
-      setNavWidth(newWidth);
-    };
-
-    const handleMouseUp = () => cleanup();
-
-    function cleanup() {
-      document.body.classList.remove('bitfun-is-dragging-nav-collapse');
-      document.body.classList.remove('bitfun-is-resizing-nav');
-      document.body.classList.remove('bitfun-divider-hovered');
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    }
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  }, [isNavCollapsed, navWidth, toggleLeftPanel]);
+  const activeOverlay = useOverlayStore((s) => s.activeOverlay);
 
   return (
-    <div className={`bitfun-workspace-body${isEntering ? ' is-entering' : ''}${isExiting ? ' is-exiting' : ''}${isDividerHovered ? ' is-divider-hovered' : ''} ${className}`}>
-      {isNavCollapsed && (
-        <div className="bitfun-workspace-body__collapsed-nav">
-          <NavBar isCollapsed onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
-        </div>
-      )}
+    <div
+      className={`bitfun-workspace-body${isEntering ? ' is-entering' : ''}${isExiting ? ' is-exiting' : ''} ${className}`}
+    >
+      {/* Full-width unified top bar */}
+      <UnifiedTopBar
+        activeOverlay={activeOverlay}
+        onMinimize={onMinimize}
+        onMaximize={onMaximize}
+        onClose={onClose}
+        isMaximized={isMaximized}
+      />
 
-      {/* Left: nav history bar + navigation sidebar — always rendered for slide animation */}
-      <div
-        className={`bitfun-workspace-body__nav-area${isNavCollapsed ? ' is-collapsed' : ''}`}
-        style={isNavCollapsed ? undefined : { '--nav-width': `${navWidth}px` } as React.CSSProperties}
-      >
-        <NavBar onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
-        <NavPanel className="bitfun-workspace-body__nav-panel" />
-      </div>
-
-      {/* Resize divider */}
-      {!isNavCollapsed && (
-        <div
-          className="bitfun-workspace-body__nav-divider"
-          style={{ '--nav-width': `${navWidth}px` } as React.CSSProperties}
-          onMouseDown={handleNavCollapseDragStart}
-          onMouseEnter={handleDividerMouseEnter}
-          onMouseLeave={handleDividerMouseLeave}
-          role="separator"
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Right: Agentic OS two-layer scene area */}
-      <div className="bitfun-workspace-body__scene-area">
+      {/* Full-width content area */}
+      <div className="bitfun-workspace-body__content">
         <AgenticOSWorkspace
           isEntering={isEntering}
           onMinimize={onMinimize}
@@ -140,10 +68,29 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         {sceneOverlay}
       </div>
 
-      {/* Independent footer bar — always visible regardless of nav collapse state */}
+      {/* Floating session capsule */}
+      <SessionCapsule />
+
+      {/* Bottom-left floating: More menu (Dispatcher, Shell, …) */}
       <div className="bitfun-workspace-body__nav-footer">
         <PersistentFooterActions />
       </div>
+
+      {/* Bottom-right: notification center trigger */}
+      <div className="bitfun-workspace-body__notification-fab">
+        <NotificationButton
+          className="bitfun-workspace-body__notification-btn"
+          tooltipPlacement="left"
+        />
+      </div>
+
+      {/*
+       * FloatingFileTree — CURRENTLY DISABLED
+       * Uncomment and import when ready to enable.
+       *
+       * import FloatingFileTree from '../components/FloatingFileTree/FloatingFileTree';
+       * <FloatingFileTree />
+       */}
     </div>
   );
 };

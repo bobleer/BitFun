@@ -2,8 +2,8 @@
  * FileViewerNav — scene-specific navigation for the file viewer scene.
  *
  * Header mirrors the directory NavItem (Folder icon + label, same font-size /
- * height / padding) so the transition from MainNav feels like the item
- * "expanded in-place". Navigation back is handled by NavBar's back button.
+ * height / padding) so the transition feels like the item "expanded in-place".
+ * Navigation back is handled by the Home button in UnifiedTopBar.
  */
 
 import React, { useState, useCallback } from 'react';

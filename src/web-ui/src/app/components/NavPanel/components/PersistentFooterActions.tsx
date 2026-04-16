@@ -1,51 +1,66 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
-  Settings,
-  Info,
-  MoreVertical,
-  PictureInPicture2,
   SquareTerminal,
-  Terminal,
-  Smartphone,
   ChevronUp,
+  Orbit,
+  RotateCcw,
+  User,
+  AppWindow,
+  ChevronDown,
+  Users,
+  MonitorPlay,
+  Puzzle,
 } from 'lucide-react';
-import { Tooltip, Modal } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useOverlayManager } from '../../../hooks/useOverlayManager';
-import { useNavSceneStore } from '../../../stores/navSceneStore';
-import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { useNotification } from '@/shared/notification-system';
-import { AboutDialog } from '../../AboutDialog';
-import { RemoteConnectDialog } from '../../RemoteConnectDialog';
-import {
-  RemoteConnectDisclaimerContent,
-} from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
-import {
-  getRemoteConnectDisclaimerAgreed,
-  setRemoteConnectDisclaimerAgreed,
-} from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
+import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { useOverlayStore } from '../../../stores/overlayStore';
+import { useMyAgentStore } from '../../../scenes/my-agent/myAgentStore';
+import { useMiniAppCatalogSync } from '../../../scenes/miniapps/hooks/useMiniAppCatalogSync';
+import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { openDispatcherSession } from '@/flow_chat/services/openDispatcherSession';
+import { WorkspaceKind } from '@/shared/types';
+import { createLogger } from '@/shared/utils/logger';
+import { useApp } from '../../../hooks/useApp';
+
+// Footer styles live in NavPanel.scss; this component is also mounted from WorkspaceBody
+// without mounting the full NavPanel shell, so we must import the sheet here or the floating bar is unstyled.
+import '../NavPanel.scss';
+
+const log = createLogger('PersistentFooterActions');
+
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
-  const { openOverlay } = useOverlayManager();
-  const showSceneNav = useNavSceneStore((s) => s.showSceneNav);
-  const navSceneId = useNavSceneStore((s) => s.navSceneId);
-  const openNavScene = useNavSceneStore((s) => s.openNavScene);
-  const closeNavScene = useNavSceneStore((s) => s.closeNavScene);
+  const { openOverlay, toggleOverlay } = useOverlayManager();
 
-  const { enableToolbarMode } = useToolbarModeContext();
-  const { hasWorkspace } = useCurrentWorkspace();
-  const { warning } = useNotification();
+  const { switchLeftPanelTab } = useApp();
+
+  useMiniAppCatalogSync();
+
+  const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
+
+  const {
+    currentWorkspace,
+    assistantWorkspacesList,
+    setActiveWorkspace,
+  } = useWorkspaceContext();
+
+  const defaultAssistantWorkspace = useMemo(
+    () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
+    [assistantWorkspacesList]
+  );
+
+  const isAssistantWorkspaceActive = currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
-  const [showAbout, setShowAbout] = useState(false);
-  const [showRemoteConnect, setShowRemoteConnect] = useState(false);
-  const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
-  const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
+  const [isAAppSubOpen, setIsAAppSubOpen] = useState(false);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
+    setIsAAppSubOpen(false);
     setTimeout(() => {
       setMenuOpen(false);
       setMenuClosing(false);
@@ -60,52 +75,88 @@ const PersistentFooterActions: React.FC = () => {
     }
   };
 
-  const handleOpenSettings = () => {
-    closeMenu();
-    openOverlay('settings');
-  };
-
   const handleOpenShell = useCallback(() => {
-    if (showSceneNav && navSceneId === 'shell') {
-      closeNavScene();
-      return;
-    }
-    openNavScene('shell');
-  }, [closeNavScene, navSceneId, openNavScene, showSceneNav]);
-
-  const handleShowAbout = () => {
     closeMenu();
-    setShowAbout(true);
-  };
+    toggleOverlay('shell');
+  }, [closeMenu, toggleOverlay]);
 
-  const handleFloatingMode = () => {
+  const handleOpenDispatcher = useCallback(async () => {
     closeMenu();
-    enableToolbarMode();
-  };
-
-  const handleRemoteConnect = useCallback(async () => {
-    if (!hasWorkspace) {
-      warning(t('header.remoteConnectRequiresWorkspace'));
-      return;
+    try {
+      await openDispatcherSession({
+        assistantWorkspace: defaultAssistantWorkspace
+          ? { rootPath: defaultAssistantWorkspace.rootPath, id: defaultAssistantWorkspace.id }
+          : null,
+      });
+    } catch (err) {
+      log.error('Failed to open Dispatcher', err);
     }
+  }, [closeMenu, defaultAssistantWorkspace]);
 
+  const handleNewDispatcherSession = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (defaultAssistantWorkspace) {
+        await flowChatManager.createChatSession(
+          { workspacePath: defaultAssistantWorkspace.rootPath, workspaceId: defaultAssistantWorkspace.id },
+          'Dispatcher'
+        );
+      } else {
+        await flowChatManager.createChatSession({}, 'Dispatcher');
+      }
+    } catch (err) {
+      log.error('Failed to create new Dispatcher session', err);
+    }
+  }, [defaultAssistantWorkspace]);
+
+  const handleOpenAssistant = useCallback(() => {
     closeMenu();
+    const targetAssistantWorkspace =
+      isAssistantWorkspaceActive && currentWorkspace?.workspaceKind === WorkspaceKind.Assistant
+        ? currentWorkspace
+        : defaultAssistantWorkspace;
 
-    if (hasAgreedRemoteDisclaimer || getRemoteConnectDisclaimerAgreed()) {
-      setHasAgreedRemoteDisclaimer(true);
-      setShowRemoteConnect(true);
-      return;
+    if (targetAssistantWorkspace?.id) {
+      setSelectedAssistantWorkspaceId(targetAssistantWorkspace.id);
     }
+    if (!isAssistantWorkspaceActive && targetAssistantWorkspace) {
+      void setActiveWorkspace(targetAssistantWorkspace.id).catch(error => {
+        log.warn('Failed to activate default assistant workspace', { error });
+      });
+    }
+    switchLeftPanelTab('profile');
+    openOverlay('assistant');
+  }, [
+    closeMenu,
+    currentWorkspace,
+    defaultAssistantWorkspace,
+    isAssistantWorkspaceActive,
+    openOverlay,
+    setActiveWorkspace,
+    setSelectedAssistantWorkspaceId,
+    switchLeftPanelTab,
+  ]);
 
-    setShowRemoteDisclaimer(true);
-  }, [hasWorkspace, warning, t, closeMenu, hasAgreedRemoteDisclaimer]);
+  const handleOpenAgents = useCallback(() => {
+    closeMenu();
+    openOverlay('agents');
+  }, [closeMenu, openOverlay]);
 
-  const handleAgreeDisclaimer = useCallback(() => {
-    setRemoteConnectDisclaimerAgreed();
-    setHasAgreedRemoteDisclaimer(true);
-    setShowRemoteDisclaimer(false);
-    setShowRemoteConnect(true);
-  }, []);
+  const handleOpenSkills = useCallback(() => {
+    closeMenu();
+    openOverlay('skills');
+  }, [closeMenu, openOverlay]);
+
+  const handleOpenMiniApps = useCallback(() => {
+    closeMenu();
+    openOverlay('miniapps');
+  }, [closeMenu, openOverlay]);
+
+  const isAssistantActive = activeOverlay === 'assistant';
+  const isAgentsActive = activeOverlay === 'agents';
+  const isSkillsActive = activeOverlay === 'skills';
+  const isMiniAppsActive = activeOverlay === 'miniapps' || (typeof activeOverlay === 'string' && activeOverlay.startsWith('miniapp:'));
+  const isShellActive = activeOverlay === 'shell';
 
   return (
     <>
@@ -121,10 +172,10 @@ const PersistentFooterActions: React.FC = () => {
                 onClick={toggleMenu}
               >
                 {menuOpen ? (
-                  <MoreVertical size={15} aria-hidden="true" />
+                  <ChevronUp size={15} aria-hidden="true" />
                 ) : (
                   <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                    <MoreVertical size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+                    <Orbit size={14} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
                     <ChevronUp size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
                   </span>
                 )}
@@ -141,89 +192,123 @@ const PersistentFooterActions: React.FC = () => {
                   className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
                   role="menu"
                 >
-                  <Tooltip
-                    content={t('header.remoteConnectRequiresWorkspace')}
-                    placement="right"
-                    disabled={hasWorkspace}
+                  {/* ── 导航操作区 ── */}
+                  <button
+                    type="button"
+                    className={`bitfun-nav-panel__footer-menu-item${isAssistantActive ? ' is-active' : ''}`}
+                    role="menuitem"
+                    onClick={handleOpenAssistant}
                   >
+                    <User size={14} />
+                    <span>{t('nav.items.persona')}</span>
+                  </button>
+
+                  {/* ── 智能应用（二级菜单）── */}
+                  <button
+                    type="button"
+                    className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--expandable${isAAppSubOpen ? ' is-open' : ''}`}
+                    role="menuitem"
+                    aria-expanded={isAAppSubOpen}
+                    onClick={() => setIsAAppSubOpen(v => !v)}
+                  >
+                    <AppWindow size={14} />
+                    <span>{t('nav.sections.agentApp')}</span>
+                    <ChevronDown
+                      size={13}
+                      className={`bitfun-nav-panel__footer-menu-chevron${isAAppSubOpen ? ' is-open' : ''}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+
+                  <div className={`bitfun-nav-panel__footer-menu-sublist${isAAppSubOpen ? ' is-open' : ''}`}>
+                    <div>
+                      <button
+                        type="button"
+                        className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isAgentsActive ? ' is-active' : ''}`}
+                        role="menuitem"
+                        onClick={handleOpenAgents}
+                      >
+                        <Users size={13} />
+                        <span>{t('nav.items.agents')}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isMiniAppsActive ? ' is-active' : ''}`}
+                        role="menuitem"
+                        onClick={handleOpenMiniApps}
+                      >
+                        <AppWindow size={13} />
+                        <span>{t('nav.items.miniApps')}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub is-disabled"
+                        role="menuitem"
+                        disabled
+                      >
+                        <MonitorPlay size={13} />
+                        <span>{t('nav.items.driveAApp')}</span>
+                        <span className="bitfun-nav-panel__top-action-badge">{t('nav.badges.comingSoon')}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`bitfun-nav-panel__footer-menu-item${isSkillsActive ? ' is-active' : ''}`}
+                    role="menuitem"
+                    onClick={handleOpenSkills}
+                  >
+                    <Puzzle size={14} />
+                    <span>{t('nav.items.skills')}</span>
+                  </button>
+
+                  <div className="bitfun-nav-panel__footer-menu-divider" />
+
+                  <button
+                    type="button"
+                    className={`bitfun-nav-panel__footer-menu-item${isShellActive ? ' is-active' : ''}`}
+                    role="menuitem"
+                    aria-pressed={isShellActive}
+                    onClick={handleOpenShell}
+                  >
+                    <SquareTerminal size={14} />
+                    <span>{t('scenes.shell')}</span>
+                  </button>
+
+                  <div className="bitfun-nav-panel__footer-menu-divider" />
+
+                  <div className="bitfun-nav-panel__footer-menu-row">
                     <button
                       type="button"
-                      className={`bitfun-nav-panel__footer-menu-item${!hasWorkspace ? ' is-disabled' : ''}`}
+                      className="bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--row-main"
                       role="menuitem"
-                      aria-disabled={!hasWorkspace}
-                      onClick={handleRemoteConnect}
+                      onClick={handleOpenDispatcher}
                     >
-                      <Smartphone size={14} />
-                      <span>{t('header.remoteConnect')}</span>
+                      <Orbit size={14} />
+                      <span>{t('nav.sessions.dispatcherShort')}</span>
                     </button>
-                  </Tooltip>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    onClick={handleFloatingMode}
-                  >
-                    <PictureInPicture2 size={14} />
-                    <span>{t('header.switchToToolbar')}</span>
-                  </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    onClick={handleOpenSettings}
-                  >
-                    <Settings size={14} />
-                    <span>{t('tabs.settings')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    onClick={handleShowAbout}
-                  >
-                    <Info size={14} />
-                    <span>{t('header.about')}</span>
-                  </button>
+                    <Tooltip content={t('nav.tooltips.newDispatcherSession')} placement="right">
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__footer-menu-item-inline-btn"
+                        onClick={handleNewDispatcherSession}
+                        aria-label={t('nav.tooltips.newDispatcherSession')}
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    </Tooltip>
+                  </div>
                 </div>
               </>
             )}
           </div>
 
-          <Tooltip content={t('scenes.shell')} placement="right">
-            <button
-              type="button"
-              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${showSceneNav && navSceneId === 'shell' ? ' is-active' : ''}`}
-              aria-label={t('scenes.shell')}
-              aria-pressed={showSceneNav && navSceneId === 'shell'}
-              onClick={handleOpenShell}
-            >
-              <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                <SquareTerminal size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                <Terminal size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-              </span>
-            </button>
-          </Tooltip>
         </div>
 
       </div>
-      <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
-      <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
-      <Modal
-        isOpen={showRemoteDisclaimer}
-        onClose={() => setShowRemoteDisclaimer(false)}
-        title={t('remoteConnect.disclaimerTitle')}
-        showCloseButton
-        size="large"
-        contentInset
-      >
-        <RemoteConnectDisclaimerContent
-          agreed={hasAgreedRemoteDisclaimer}
-          onClose={() => setShowRemoteDisclaimer(false)}
-          onAgree={handleAgreeDisclaimer}
-        />
-      </Modal>
     </>
   );
 };

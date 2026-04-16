@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Code2, ListTodo, Sparkles, MoreHorizontal, Loader2 } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -45,7 +45,7 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 };
 
 const getTitle = (session: Session): string =>
-  session.title?.trim() || `Session ${session.sessionId.slice(0, 6)}`;
+  session.title?.trim() || `Task ${session.sessionId.slice(0, 6)}`;
 
 interface SessionsSectionProps {
   workspaceId?: string;
@@ -62,6 +62,8 @@ interface SessionsSectionProps {
   showSessionModeIcon?: boolean;
   /** Main nav: list every loaded session and resolve workspace on switch (no per-workspace blocks). */
   listAllSessions?: boolean;
+  /** Client-side filter (title, id, workspace name when listAllSessions). */
+  listFilterQuery?: string;
 }
 
 const SessionsSection: React.FC<SessionsSectionProps> = ({
@@ -73,6 +75,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   assistantLabel,
   showSessionModeIcon = true,
   listAllSessions = false,
+  listFilterQuery,
 }) => {
   const { t } = useI18n('common');
   const { setActiveWorkspace, currentWorkspace, openedWorkspacesList } = useWorkspaceContext();
@@ -193,6 +196,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     return out;
   }, [childrenByParent, topLevelSessions]);
+
+  const filteredVisibleItems = useMemo(() => {
+    const q = listFilterQuery?.trim();
+    if (!q) return visibleItems;
+    const lower = q.toLowerCase();
+    return visibleItems.filter(({ session }) => {
+      if (getTitle(session).toLowerCase().includes(lower)) return true;
+      if (session.sessionId.toLowerCase().includes(lower)) return true;
+      if (listAllSessions) {
+        const ws = findOpenedWorkspaceForSession(session, openedWorkspacesList);
+        if (ws?.name?.toLowerCase().includes(lower)) return true;
+        if (ws && getWorkspaceDisplayName(ws).toLowerCase().includes(lower)) return true;
+      }
+      return false;
+    });
+  }, [visibleItems, listFilterQuery, listAllSessions, openedWorkspacesList]);
 
   const activeSessionId = flowChatState.activeSessionId;
 
@@ -355,9 +374,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return null;
   }
 
+  if (filteredVisibleItems.length === 0 && listFilterQuery?.trim()) {
+    return (
+      <div className="bitfun-nav-panel__inline-list bitfun-nav-panel__inline-list--filter-empty">
+        <div className="bitfun-nav-panel__filter-empty">{t('nav.sessionCapsule.filterNoMatch')}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="bitfun-nav-panel__inline-list">
-      {visibleItems.map(({ session, level }) => {
+      {filteredVisibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);
           const isBtwChild = level === 1 && relationship.isBtw;
@@ -396,11 +423,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
           const SessionIcon =
             sessionModeKey === 'cowork'
-              ? ClipboardList
+              ? ListTodo
               : sessionModeKey === 'claw'
-                ? showContextInTooltip
-                  ? Panda
-                  : Bot
+                ? Sparkles
                 : Code2;
           const isRunning = runningSessionIds.has(session.sessionId);
           const isRowActive = activeBtwSessionData?.childSessionId
@@ -414,6 +439,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 isBtwChild && 'is-btw-child',
                 isRowActive && 'is-active',
                 isEditing && 'is-editing',
+                openMenuSessionId === session.sessionId && 'is-menu-open',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -498,6 +524,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       ref={sessionMenuPopoverRef}
                       className="bitfun-nav-panel__inline-item-menu-popover"
                       role="menu"
+                      data-bitfun-ignore-session-capsule-outside
                       style={{ top: `${sessionMenuPosition.top}px`, left: `${sessionMenuPosition.left}px` }}
                     >
                       <button

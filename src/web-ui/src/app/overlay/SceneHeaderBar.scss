@@ -96,11 +96,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 400px;
-    height: 26px;
-    padding: 0 $size-gap-2;
+    box-sizing: border-box;
+    width: min(480px, calc(100vw - 96px));
+    height: 28px;
+    padding: 0 $size-gap-4;
     border: 1px solid transparent;
-    border-radius: $size-radius-sm;
+    border-radius: 9999px;
     background: var(--element-bg-soft);
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
@@ -136,6 +137,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
+    width: 100%;
     max-width: 100%;
     min-width: 0;
   }
@@ -144,40 +146,16 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    opacity: 0.7;
+    opacity: 0.75;
   }
 
   &__search-label {
     flex: 0 1 auto;
     min-width: 0;
+    text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  &__search-shortcuts {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-    margin-left: 2px;
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: 0.02em;
-    color: var(--color-text-muted);
-  }
-
-  &__search-kbd {
-    display: inline-block;
-    padding: 1px 4px;
-    border-radius: 3px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-    background: color-mix(in srgb, var(--color-bg-primary) 50%, transparent);
-    font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1.15;
-    color: var(--color-text-muted);
   }
 
   // ── Right: actions — pushed to the right end ──────────

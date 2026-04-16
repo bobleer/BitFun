@@ -62,7 +62,7 @@ export const APP_SHORTCUTS: ShortcutDef[] = [
     descriptionKey: 'keyboard.shortcuts.scene.openSettings',
   },
 
-  // Left nav: workspace / session quick search (Alt+F is handled in MainNav without a second catalog id)
+  // Global workspace search (handled in UnifiedTopBar; Alt+F is a secondary binding without a separate catalog id)
   {
     id: 'nav.toggleSearch',
     config: mod('k', { scope: 'app', allowInInput: true }),
