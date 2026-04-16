@@ -7,7 +7,7 @@
  * Section groups:
  *   - workspace: project workspace essentials (sessions, files)
  *   - assistant: assistant persona / nursery (profile)
- *   - extensions: top strip expand row → agents / skills (each own scene tab, MainNav stays visible)
+ *   - extensions: top strip expand row → agents / skills (each own scene tab)
  */
 
 import type { NavSection } from './types';

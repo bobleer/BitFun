@@ -2,10 +2,10 @@
  * Main application layout.
  *
  * Column structure (top to bottom):
- *   WorkspaceBody (flex:1) — contains NavBar (with WindowControls) + NavPanel + SceneArea
- *   OR StartupContent
+ *   WorkspaceBody (flex:1) — contains UnifiedTopBar + full-width content area
+ *                             floating: SessionCapsule
  *
- * TitleBar removed; window controls moved to NavBar, dialogs managed here.
+ * TitleBar removed; window controls moved to UnifiedTopBar, dialogs managed here.
  */
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
@@ -142,13 +142,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   useEffect(() => {
     const onOpenProject = () => { void handleOpenProject(); };
     const onNewProject = () => handleNewProject();
+    const onShowAbout = () => handleShowAbout();
     window.addEventListener('nav:open-project', onOpenProject);
     window.addEventListener('nav:new-project', onNewProject);
+    window.addEventListener('nav:show-about', onShowAbout);
     return () => {
       window.removeEventListener('nav:open-project', onOpenProject);
       window.removeEventListener('nav:new-project', onNewProject);
+      window.removeEventListener('nav:show-about', onShowAbout);
     };
-  }, [handleNewProject, handleOpenProject]);
+  }, [handleNewProject, handleOpenProject, handleShowAbout]);
 
   // macOS native menubar events (previously in TitleBar)
   const isMacOS = useMemo(() => {

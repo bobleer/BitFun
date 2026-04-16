@@ -76,7 +76,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 2px $size-gap-1;
+    padding: 2px 2px;
     border-radius: $size-radius-base;
     background: transparent;
     border: 1px solid transparent;
@@ -593,13 +593,13 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      margin-left: 12px;
+      margin-left: 0;
       margin-right: 0;
       padding-top: 0;
     }
 
     .bitfun-nav-panel__inline-empty {
-      padding-left: $size-gap-1;
+      padding-left: 2px;
     }
   }
 
@@ -638,7 +638,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: $size-gap-1;
+    padding: $size-gap-1 2px;
     border-radius: $size-radius-base;
     background: transparent;
     border: 1px solid transparent;
@@ -889,13 +889,13 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      margin-left: 12px;
+      margin-left: 0;
       margin-right: 0;
       padding-top: 0;
     }
 
     .bitfun-nav-panel__inline-empty {
-      padding-left: $size-gap-1;
+      padding-left: 2px;
     }
   }
 }

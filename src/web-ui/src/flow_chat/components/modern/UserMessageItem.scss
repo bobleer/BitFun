@@ -75,20 +75,103 @@
   margin-top: 0.4rem;
   padding-top: 0.4rem;
   border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  font-weight: 400;
-  font-size: 0.9rem;
-  line-height: 1.7;
-  color: var(--color-text-primary, #e0e0e0);
-  white-space: pre-wrap;
-  word-break: break-word;
   user-select: text;
-  max-height: 60vh;
-  overflow-y: auto;
 }
 
-// Expanded state marker (kept for compat, no longer controls height directly).
+.user-message-item__expanded-markdown {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--tool-card-text-muted);
+  animation: none;
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: var(--tool-card-text-secondary);
+    margin-top: 0.65rem;
+    margin-bottom: 0.35rem;
+    border: none;
+    padding: 0;
+  }
+
+  h1 { font-size: 0.95rem; }
+  h2 { font-size: 0.9rem; }
+  h3, h4, h5, h6 { font-size: 0.85rem; }
+
+  > *:first-child { margin-top: 0; }
+  > *:last-child { margin-bottom: 0; }
+
+  p, li {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--tool-card-text-muted);
+  }
+
+  p { margin-bottom: 0.35rem; }
+
+  strong {
+    font-weight: 600;
+    color: var(--tool-card-text-secondary);
+  }
+
+  em { color: var(--tool-card-text-muted); }
+
+  ul, ol {
+    margin: 0.25rem 0 0.35rem;
+    padding-left: 1.25rem;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--tool-card-text-muted) 25%, transparent);
+    margin: 0.5rem 0;
+  }
+
+  blockquote,
+  .custom-blockquote {
+    margin: 0.35rem 0;
+    padding: 0.25rem 0 0.25rem 0.6rem;
+    border-left: 2px solid color-mix(in srgb, var(--tool-card-text-muted) 35%, transparent);
+    color: var(--tool-card-text-muted);
+    background: transparent;
+  }
+
+  .inline-code {
+    font-size: 0.85em;
+    padding: 0.1em 0.2em;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    color: var(--tool-card-text-secondary);
+  }
+
+  .code-block-wrapper {
+    margin: 0.35rem 0;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--tool-card-text-muted) 18%, transparent);
+    background: color-mix(in srgb, var(--tool-card-text-muted) 8%, transparent);
+
+    pre[class*='language-'],
+    pre[style] {
+      font-size: 11px !important;
+      line-height: 1.4 !important;
+    }
+  }
+}
+
+// Expanded state: add rounded border for system / human compact rows.
 .user-message-item--expanded {
-  // intentionally empty
+  &.user-message-item--system,
+  &.user-message-item--human {
+    border: 1px solid var(--border-medium);
+    border-radius: 8px;
+    padding: 0.35rem 0.75rem;
+    opacity: 1;
+
+    .user-message-item__expanded-body {
+      max-height: 40vh;
+      overflow-y: auto;
+    }
+  }
 }
 
 .user-message-item__blocks {
@@ -161,7 +244,55 @@
   // Intentionally empty.
 }
 
-// Single-row container for system messages.
+// Line 1: icon + source info (agent type · session name).
+.user-message-item__system-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+  min-width: 0;
+}
+
+// Source info container.
+.user-message-item__source-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+// Agent type chip (e.g. "agentic", "Dispatcher").
+.user-message-item__source-agent-type {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.28));
+  user-select: none;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+// Separator dot between agent type and session name.
+.user-message-item__source-sep {
+  font-size: 0.68rem;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.2));
+  user-select: none;
+  flex-shrink: 0;
+}
+
+// Session name (truncated).
+.user-message-item__source-session-name {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.22));
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+// Line 2: message content row.
 .user-message-item__system-row {
   display: flex;
   align-items: center;
@@ -169,7 +300,7 @@
   min-width: 0;
 }
 
-// Source type label (e.g. "Agent Session").
+// Source type label (fallback for non-agent_session sources).
 .user-message-item__source-label {
   flex-shrink: 0;
   font-size: 0.68rem;

@@ -12,11 +12,22 @@
   &__inline-list {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2 2px;
+    padding: 2px 0;
     gap: 1px;
     // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
     // (see .bitfun-nav-panel__items--session-blocks gap: 0), aligned with __workspace-item padding.
-    margin: 0 $size-gap-2 0 calc(#{$size-gap-2} + 4px);
+    // Flush to __items / workspace row — row padding + __inline-item handle edge inset.
+    margin: 0;
+
+    &--filter-empty {
+      padding: $size-gap-2 $size-gap-3;
+    }
+  }
+
+  &__filter-empty {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-align: center;
   }
 
   &__inline-action {
@@ -60,7 +71,7 @@
     align-items: center;
     gap: 5px;
     height: 26px;
-    padding: 0 $size-gap-1;
+    padding: 0 2px;
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -96,13 +107,13 @@
     &.is-child {
       min-height: 24px;
       font-size: var(--font-size-xs);
-      padding-left: calc(#{$size-gap-1} + 14px);
+      padding-left: calc(2px + 12px);
       position: relative;
 
       &::before {
         content: '';
         position: absolute;
-        left: 8px;
+        left: 6px;
         top: 0;
         width: 1px;
         height: 50%;
@@ -113,9 +124,9 @@
       &::after {
         content: '';
         position: absolute;
-        left: 8px;
+        left: 6px;
         top: 50%;
-        width: 10px;
+        width: 8px;
         height: 1px;
         background: color-mix(in srgb, var(--border-subtle) 92%, transparent);
         opacity: 0.95;
@@ -221,15 +232,23 @@
     word-break: break-word;
   }
 
+  // Reserve width always so long titles do not reflow when the more button fades in.
   &__inline-item-actions {
-    display: none;
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 2px;
-    flex-shrink: 0;
+    flex: 0 0 16px;
+    width: 16px;
     margin-left: auto;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-fast $easing-standard;
 
-    .bitfun-nav-panel__inline-item:hover & {
-      display: flex;
+    .bitfun-nav-panel__inline-item:hover &,
+    .bitfun-nav-panel__inline-item.is-menu-open & {
+      opacity: 1;
+      pointer-events: auto;
     }
   }
 
@@ -478,7 +497,8 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-nav-panel {
     &__inline-item,
-    &__inline-action {
+    &__inline-action,
+    &__inline-item-actions {
       transition: none;
     }
   }

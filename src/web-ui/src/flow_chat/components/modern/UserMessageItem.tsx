@@ -15,6 +15,7 @@ import { snapshotAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { ReproductionStepsBlock, Tooltip, confirmDanger } from '@/component-library';
+import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import { createLogger } from '@/shared/utils/logger';
 import './UserMessageItem.scss';
 
@@ -38,9 +39,10 @@ function triggerSourceModifier(triggerSource: TriggerSource | undefined): string
   }
 }
 
-/** Maps a TriggerSource to a display label (non-agent_session; those use the Agentic OS nav icon). */
+/** Maps a TriggerSource to a tooltip label for system-triggered messages. */
 function triggerSourceLabel(triggerSource: TriggerSource | undefined): string {
   switch (triggerSource) {
+    case 'agent_session': return 'Agentic OS';
     case 'scheduled_job': return 'Scheduled';
     case 'bot': return 'Bot';
     case 'cli': return 'CLI';
@@ -129,6 +131,19 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const isFailed = dialogTurn?.status === 'error';
     const isSystem = isSystemTrigger(message?.triggerSource);
     const canRollback = !!sessionId && turnIndex >= 0 && !isRollingBack && !isSystem;
+
+    // For agent_session triggered messages, look up the source session's name and agent type.
+    const sourceSessionInfo = useMemo(() => {
+      if (!isSystem) return null;
+      const sourceSessionId = message?.metadata?.sourceSessionId as string | undefined;
+      if (!sourceSessionId) return null;
+      const session = flowChatStore.getState().sessions.get(sourceSessionId);
+      if (!session) return null;
+      return {
+        sessionName: session.title || sourceSessionId.slice(0, 8),
+        agentType: session.config?.agentType || session.mode || 'agentic',
+      };
+    }, [isSystem, message?.metadata?.sourceSessionId]);
 
     const { displayText, reproductionSteps } = useMemo(() => {
       const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
@@ -270,25 +285,34 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </time>
         </div>
         <div ref={containerRef} className={rootClassName}>
+          {/* Line 1: icon + source label (agent type · session name) */}
+          <div className="user-message-item__system-header">
+            <span
+              className="user-message-item__agentic-os-icon"
+              aria-label={triggerSourceLabel(message.triggerSource)}
+              title={triggerSourceLabel(message.triggerSource)}
+            >
+              <Orbit size={12} strokeWidth={2} />
+            </span>
+            <span className="user-message-item__source-info">
+              {sourceSessionInfo ? (
+                <>
+                  <span className="user-message-item__source-agent-type">{sourceSessionInfo.agentType}</span>
+                  <span className="user-message-item__source-sep">·</span>
+                  <span className="user-message-item__source-session-name">{sourceSessionInfo.sessionName}</span>
+                </>
+              ) : (
+                <span className="user-message-item__source-agent-type">{triggerSourceLabel(message.triggerSource)}</span>
+              )}
+            </span>
+          </div>
+          {/* Line 2: message content (truncated, expandable) */}
           <div
             className="user-message-item__system-row"
             onClick={handleToggleExpand}
             style={{ cursor: (isTruncated || expanded) ? 'pointer' : 'default' }}
             title={(isTruncated || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
           >
-            {message.triggerSource === 'agent_session' ? (
-              <span
-                className="user-message-item__agentic-os-icon"
-                aria-label={t('session.dispatcher')}
-                title={t('session.dispatcher')}
-              >
-                <Orbit size={14} strokeWidth={2} />
-              </span>
-            ) : (
-              <span className="user-message-item__source-label">
-                {triggerSourceLabel(message.triggerSource)}
-              </span>
-            )}
             <span ref={contentRef} className="user-message-item__system-content">
               {highlightText(displayText, searchQuery ?? '')}
             </span>
@@ -302,7 +326,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
           {expanded && (
             <div className="user-message-item__expanded-body">
-              {highlightText(displayText, searchQuery ?? '')}
+              <Markdown content={displayText} className="user-message-item__expanded-markdown" />
             </div>
           )}
         </div>
@@ -372,7 +396,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         {/* Expanded full content */}
         {expanded && (
           <div className="user-message-item__expanded-body">
-            {highlightText(quotedDisplayText, searchQuery ?? '')}
+            <Markdown content={displayText} className="user-message-item__expanded-markdown" />
           </div>
         )}
 

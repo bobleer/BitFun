@@ -1,13 +1,21 @@
 /**
- * SettingsScene — content-only renderer for the Settings scene.
+ * SettingsScene — self-contained settings page with internal left-right layout.
  *
- * The left-side navigation lives in SettingsNav (rendered by NavPanel via
- * nav-registry). This component only renders the active config content panel
- * driven by settingsStore.activeTab.
+ * Previous design: SettingsNav was injected into the outer NavPanel via nav-registry.
+ * New design: SettingsNav is embedded directly inside this scene, forming a
+ * standalone left-right layout that does not depend on the outer navigation shell.
+ *
+ * Layout:
+ *   ┌──────────────────────────────────────────────────┐
+ *   │ SettingsNav (220px) │ SettingsContent (flex:1)    │
+ *   │   search            │   BasicsConfig /            │
+ *   │   category list     │   AIModelConfig / …         │
+ *   └──────────────────────────────────────────────────┘
  */
 
 import React, { lazy, Suspense } from 'react';
 import { useSettingsStore } from './settingsStore';
+import SettingsNav from './SettingsNav';
 import './SettingsScene.scss';
 import AIModelConfig from '../../../infrastructure/config/components/AIModelConfig';
 import SessionConfig from '../../../infrastructure/config/components/SessionConfig';
@@ -21,36 +29,40 @@ const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTa
 const SettingsScene: React.FC = () => {
   const activeTab = useSettingsStore(s => s.activeTab);
 
-  if (activeTab === 'keyboard') {
-    return (
-      <div className="bitfun-settings-scene">
-        <div key="keyboard" className="bitfun-settings-scene__content-wrapper">
-          <Suspense fallback={null}>
-            <KeyboardShortcutsTab />
-          </Suspense>
-        </div>
-      </div>
-    );
-  }
-
   let Content: React.ComponentType | null = null;
 
-  switch (activeTab) {
-    case 'basics':           Content = BasicsConfig;         break;
-    case 'models':           Content = AIModelConfig;        break;
-    case 'session-config':   Content = SessionConfig;        break;
-    case 'ai-context':       Content = AIMemoryConfig; break;
-    case 'mcp-tools':        Content = McpToolsConfig;      break;
-    case 'editor':           Content = EditorConfig;         break;
+  if (activeTab === 'keyboard') {
+    Content = () => (
+      <Suspense fallback={null}>
+        <KeyboardShortcutsTab />
+      </Suspense>
+    );
+  } else {
+    switch (activeTab) {
+      case 'basics':           Content = BasicsConfig;     break;
+      case 'models':           Content = AIModelConfig;    break;
+      case 'session-config':   Content = SessionConfig;    break;
+      case 'ai-context':       Content = AIMemoryConfig;   break;
+      case 'mcp-tools':        Content = McpToolsConfig;   break;
+      case 'editor':           Content = EditorConfig;     break;
+    }
   }
 
   return (
     <div className="bitfun-settings-scene">
-      {Content && (
-        <div key={activeTab} className="bitfun-settings-scene__content-wrapper">
-          <Content />
-        </div>
-      )}
+      {/* Left: settings navigation (embedded, not injected via nav-registry) */}
+      <div className="bitfun-settings-scene__nav">
+        <SettingsNav />
+      </div>
+
+      {/* Right: active settings content */}
+      <div className="bitfun-settings-scene__content">
+        {Content && (
+          <div key={activeTab} className="bitfun-settings-scene__content-wrapper">
+            <Content />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

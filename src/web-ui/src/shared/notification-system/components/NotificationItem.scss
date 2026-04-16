@@ -1,19 +1,15 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
+@use '../styles/match-nav-search-surface' as search-surface;
 
 .notification-item {
   display: flex;
   align-items: flex-start;
   gap: $size-gap-2;
   padding: $size-gap-3;
-  background: var(--color-bg-primary);
-  border-radius: $size-radius-base;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--border-base);
+  @include search-surface.match-nav-search-card-core;
   min-width: 280px;
   max-width: 320px;
-  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: bitfun-notification-surface-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   font-family: $font-family-sans;
 
   
@@ -180,30 +176,6 @@
     &:active {
       transform: scale(0.95);
     }
-  }
-}
-
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-
-@keyframes slideOut {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-100%);
   }
 }
 

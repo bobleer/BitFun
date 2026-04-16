@@ -405,6 +405,14 @@ impl DialogScheduler {
         session_id: &str,
         queued_turn: &QueuedTurn,
     ) -> Result<String, String> {
+        // Inject source session id into metadata for agent_session triggered turns
+        // so the frontend can display the originating session's name and agent type.
+        let extra_metadata = queued_turn.reply_route.as_ref().map(|route| {
+            serde_json::json!({
+                "sourceSessionId": route.source_session_id,
+            })
+        });
+
         let res = match queued_turn
             .image_contexts
             .as_ref()
@@ -421,6 +429,7 @@ impl DialogScheduler {
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
                         queued_turn.policy,
+                        extra_metadata,
                     )
                     .await
             }
@@ -434,6 +443,7 @@ impl DialogScheduler {
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
                         queued_turn.policy,
+                        extra_metadata,
                     )
                     .await
             }

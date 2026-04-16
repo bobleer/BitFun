@@ -1,6 +1,7 @@
 /**
  * FlowChat message search hook.
- * Searches user messages and model output text across the virtual item list.
+ * Searches user + model text, deduplicated by dialog turn: one match per turn,
+ * navigation moves between turns that contain the query.
  */
 
 import { useState, useMemo, useCallback } from 'react';
@@ -8,7 +9,9 @@ import type { VirtualItem } from '../../store/modernFlowChatStore';
 import type { AnyFlowItem } from '../../types/flow-chat';
 
 export interface SearchMatch {
+  /** Smallest virtual index in this turn where text matched (scroll / “current” anchor). */
   virtualItemIndex: number;
+  turnId: string;
   type: VirtualItem['type'];
 }
 
@@ -31,6 +34,19 @@ function extractSearchableText(items: readonly AnyFlowItem[]): string {
     .join(' ');
 }
 
+function getVirtualItemSearchText(item: VirtualItem): string {
+  if (item.type === 'user-message') {
+    return item.data?.content ?? '';
+  }
+  if (item.type === 'model-round') {
+    return extractSearchableText(item.data.items);
+  }
+  if (item.type === 'explore-group') {
+    return extractSearchableText(item.data.allItems);
+  }
+  return '';
+}
+
 export function useFlowChatSearch(virtualItems: VirtualItem[]): UseFlowChatSearchReturn {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -40,29 +56,42 @@ export function useFlowChatSearch(virtualItems: VirtualItem[]): UseFlowChatSearc
     if (!trimmed) return [];
     const q = trimmed.toLowerCase();
 
-    return virtualItems.reduce<SearchMatch[]>((acc, item, index) => {
-      let text = '';
+    const minIndexByTurn = new Map<string, number>();
 
-      if (item.type === 'user-message') {
-        text = item.data?.content ?? '';
-      } else if (item.type === 'model-round') {
-        text = extractSearchableText(item.data.items);
-      } else if (item.type === 'explore-group') {
-        text = extractSearchableText(item.data.allItems);
+    virtualItems.forEach((item, index) => {
+      const text = getVirtualItemSearchText(item);
+      if (!text.toLowerCase().includes(q)) return;
+
+      const turnId = item.turnId;
+      const prev = minIndexByTurn.get(turnId);
+      if (prev === undefined || index < prev) {
+        minIndexByTurn.set(turnId, index);
       }
+    });
 
-      if (text.toLowerCase().includes(q)) {
-        acc.push({ virtualItemIndex: index, type: item.type });
-      }
+    const ordered = [...minIndexByTurn.entries()].sort((a, b) => a[1] - b[1]);
 
-      return acc;
-    }, []);
+    return ordered.map(([turnId, virtualItemIndex]) => {
+      const item = virtualItems[virtualItemIndex];
+      return {
+        virtualItemIndex,
+        turnId,
+        type: item.type,
+      };
+    });
   }, [virtualItems, searchQuery]);
 
-  const matchIndices = useMemo<ReadonlySet<number>>(
-    () => new Set(matches.map(m => m.virtualItemIndex)),
-    [matches],
-  );
+  const matchIndices = useMemo<ReadonlySet<number>>(() => {
+    if (matches.length === 0) return new Set();
+    const matchedTurnIds = new Set(matches.map(m => m.turnId));
+    const indices = new Set<number>();
+    virtualItems.forEach((item, index) => {
+      if (matchedTurnIds.has(item.turnId)) {
+        indices.add(index);
+      }
+    });
+    return indices;
+  }, [virtualItems, matches]);
 
   const currentMatchVirtualIndex = matches[currentMatchIndex]?.virtualItemIndex ?? -1;
 

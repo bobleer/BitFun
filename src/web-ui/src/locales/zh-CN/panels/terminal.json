@@ -1,6 +1,6 @@
 {
   "title": "终端",
-  "emptyState": "从 Shell 导航中打开终端",
+  "emptyState": "在左侧列表中新建或打开终端",
   "dialog": {
     "editTerminal": {
       "title": "编辑终端",

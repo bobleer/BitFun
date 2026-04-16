@@ -466,7 +466,8 @@
     },
     "searchPlaceholder": "Search notifications...",
     "filters": {
-      "all": "All ({{count}})"
+      "all": "All ({{count}})",
+      "placeholder": "Category"
     },
     "activeTasks": {
       "title": "Active tasks ({{count}})"

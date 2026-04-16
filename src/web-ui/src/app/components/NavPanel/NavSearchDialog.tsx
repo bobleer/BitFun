@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, User, MessageSquare } from 'lucide-react';
+import { FolderOpen, User, ListChecks } from 'lucide-react';
 import { Search } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -36,7 +36,7 @@ interface SearchResultItem {
 const MAX_PER_GROUP = 20;
 
 const getTitle = (session: Session): string =>
-  session.title?.trim() || `Session ${session.sessionId.slice(0, 6)}`;
+  session.title?.trim() || `Task ${session.sessionId.slice(0, 6)}`;
 
 const sessionRecencyTime = (session: Session): number =>
   session.updatedAt ?? session.lastActiveAt ?? session.createdAt ?? 0;
@@ -66,6 +66,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
 
   useEffect(() => {
     if (!open) return;
+    setFlowChatState(flowChatStore.getState());
     const unsub = flowChatStore.subscribe(s => setFlowChatState(s));
     return () => unsub();
   }, [open]);
@@ -176,7 +177,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     const diskMatches = persistedOpenWorkspaceSessions.filter(({ meta, workspace }) => {
       if (!openedWorkspaceIdSet.has(workspace.id)) return false;
       if (meta.customMetadata?.parentSessionId) return false;
-      const label = meta.sessionName?.trim() || `Session ${meta.sessionId.slice(0, 6)}`;
+      const label = meta.sessionName?.trim() || `Task ${meta.sessionId.slice(0, 6)}`;
       if (!matchesQuery(q, label, meta.sessionId)) return false;
       return !storeIds.has(meta.sessionId);
     });
@@ -212,7 +213,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
         items.push({
           kind: 'session',
           id: meta.sessionId,
-          label: meta.sessionName?.trim() || `Session ${meta.sessionId.slice(0, 6)}`,
+          label: meta.sessionName?.trim() || `Task ${meta.sessionId.slice(0, 6)}`,
           sublabel: t('nav.search.sessionWorkspaceHint', { workspace: workspace.name }),
           workspaceId: workspace.id,
         });
@@ -357,7 +358,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
                   </div>
                 </div>
               ) : (
-                renderGroup(t('nav.search.groupSessions'), sessionItems, () => <MessageSquare size={14} />)
+                renderGroup(t('nav.search.groupSessions'), sessionItems, () => <ListChecks size={14} />)
               )}
             </>
           )}

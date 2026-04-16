@@ -1,12 +1,15 @@
 /**
- * NavBar — navigation history controls + window chrome.
+ * NavBar — DEPRECATED.
  *
- * Sits at the top of the left column, same height as the overlay header (40px).
- * Layout: [←][→]  <drag-region>  [_][□][×]
+ * This component has been superseded by UnifiedTopBar
+ * (src/web-ui/src/app/components/UnifiedTopBar/UnifiedTopBar.tsx).
  *
- * - Back/Forward buttons mirror IDE navigation history.
- * - The centre strip is a drag region for moving the window.
- * - WindowControls (minimize/maximize/close) replace the old TitleBar chrome.
+ * The former left-column NavBar (back/forward + drag + window controls) is now
+ * merged into the full-width UnifiedTopBar. Back/forward navigation buttons have
+ * been removed from the new design.
+ *
+ * This file is kept as a reference but is no longer imported or rendered.
+ * It can be safely deleted in a future cleanup pass.
  */
 
 import React, { useCallback, useMemo, useRef } from 'react';

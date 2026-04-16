@@ -11,7 +11,7 @@
  * Left-side nav sync:
  *   When an overlay with a registered scene-nav opens, navSceneStore is updated
  *   so the sidebar shows the appropriate context nav (e.g. Settings sidebar).
- *   Closing an overlay resets the sidebar to MainNav.
+ *   Closing an overlay clears scene-specific sidebar nav state.
  */
 
 import { create } from 'zustand';
@@ -19,9 +19,8 @@ import { getSceneNav } from '../scenes/nav-registry';
 import { useNavSceneStore } from './navSceneStore';
 import type { OverlaySceneId } from '../overlay/types';
 
-/** terminal → shell (shell nav registered, terminal is an alias display) */
+/** Only overlays with a registered scene-nav sync the legacy NavPanel layer. */
 function resolveNavSceneId(id: OverlaySceneId): OverlaySceneId | null {
-  if (id === 'terminal') return 'shell';
   if (typeof id === 'string' && id.startsWith('miniapp:')) return null;
   return getSceneNav(id) ? id : null;
 }
@@ -38,7 +37,7 @@ interface OverlayState {
 
   /**
    * goBack — semantic alias for closeOverlay.
-   * Used by NavBar back button for a consistent UX.
+   * Kept for backward compatibility; the NavBar back button has been removed.
    */
   goBack: () => void;
 }

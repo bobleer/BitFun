@@ -328,13 +328,13 @@
     "btwCreateTooltip": "Start a quick side question",
     "agentTypeTooltip": "{{type}}: {{path}}",
     "backToAgenticOs": "Back to Agentic OS",
-    "searchPlaceholder": "Search messages",
+    "searchPlaceholder": "Search in conversation turns",
     "searchResult": "{{current}} / {{total}}",
-    "searchNoResults": "No results",
-    "searchPrevious": "Previous match",
-    "searchNext": "Next match",
+    "searchNoResults": "No matching turns",
+    "searchPrevious": "Previous matching turn",
+    "searchNext": "Next matching turn",
     "searchClose": "Close search",
-    "searchOpen": "Search messages"
+    "searchOpen": "Search in turns"
   },
   "sessionFilesBadge": {
     "files": "files",

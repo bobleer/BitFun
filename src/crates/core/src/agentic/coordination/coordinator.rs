@@ -857,6 +857,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Submission behavior is controlled by `submission_policy`, which provides
     /// default per-source behavior while still allowing selective overrides.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub async fn start_dialog_turn(
         &self,
         session_id: String,
@@ -866,6 +867,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         agent_type: String,
         workspace_path: Option<String>,
         submission_policy: DialogSubmissionPolicy,
+        extra_user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
         self.start_dialog_turn_internal(
             session_id,
@@ -876,7 +878,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type,
             workspace_path,
             submission_policy,
-            None,
+            extra_user_message_metadata,
             false,
         )
         .await
@@ -893,6 +895,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         agent_type: String,
         workspace_path: Option<String>,
         submission_policy: DialogSubmissionPolicy,
+        extra_user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
         self.start_dialog_turn_internal(
             session_id,
@@ -903,7 +906,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type,
             workspace_path,
             submission_policy,
-            None,
+            extra_user_message_metadata,
             false,
         )
         .await
