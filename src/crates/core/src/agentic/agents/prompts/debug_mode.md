@@ -113,4 +113,3 @@ MOST IMPORTANT: Always use the exact logfile path: `{LOG_PATH}`
 - **TodoWrite**: track hypotheses and their status
 
 {ENV_INFO}
-{PROJECT_CONTEXT_FILES:exclude=review}

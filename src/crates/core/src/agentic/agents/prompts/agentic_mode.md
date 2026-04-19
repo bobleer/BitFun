@@ -139,4 +139,3 @@ IMPORTANT: Whenever you mention a file path that the user might want to open, ma
 </bad-examples>
 
 {ENV_INFO}
-{PROJECT_CONTEXT_FILES:exclude=review}

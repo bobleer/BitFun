@@ -131,4 +131,3 @@ When writing mermaid diagrams:
 </mermaid_syntax>
 
 {ENV_INFO}
-{PROJECT_CONTEXT_FILES:exclude=review}
