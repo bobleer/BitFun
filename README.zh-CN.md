@@ -1,74 +1,66 @@
 **中文**  [English](README.md)
 
-<div align="center">
+BitFun
 
-![BitFun](./png/BitFun_title.png)
-
-</div>
-<div align="center">
-
-[![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
-[![Website](https://img.shields.io/badge/Website-openbitfun.com-6f42c1?style=flat-square)](https://openbitfun.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://github.com/GCWing/BitFun)
-
-</div>
+[GitHub release](https://github.com/GCWing/BitFun/releases)
+[Website](https://openbitfun.com/)
+[License: MIT](https://github.com/GCWing/BitFun/blob/main/LICENSE)
+[Platform](https://github.com/GCWing/BitFun)
 
 ---
 
 ## 简介
 
-BitFun 是一个Agentic OS，更是你亲密无间的伙伴。
+BitFun 是面向AI时代打造的Agentic OS，承载各类**智能应用**调度和持续运行，支持 **Windows、macOS、Linux全平台桌面端**。
 
-它将能够通过手机、手表、桌面机器人等多样的方式进行交互，它在你的生活中无处不在，它会根据你来进行自我迭代。
+你不需要关心会话、工作区、上下文这些底层组织方式，所以在你面前只有一个对话框，几乎 0 门槛就能开始使用，它可以帮你写代码、做设计、办公协同、操作你的电脑...
 
-![first_screen_screenshot](./png/first_screen_screenshot_CN.png)
+你只需要提出需求，无论是在**桌面端**直接发起，还是通过**手机、机器人**等入口远程指挥，**BitFun 都会在背后组织任务、衔接上下文，并让 AI 持续工作、持续沉淀，逐步贴合你的个人流程**。
 
----
-
-## 三类一等公民应用
-
-Agentic OS 定义了三类一等公民应用，全部可在统一的**应用中心**中访问和管理：
-
-| 类型 | 英文名 | 中文名 | 定义 |
-|------|-------|-------|------|
-| ① | **Agent App** | 智能体应用 | 由一个或多个 Agent 组成的自主应用，以对话与任务流为主要交互载体。用户下达意图，Agent 自主执行。 |
-| ② | **Live App** | 灵动应用 | 以用户需求为中心，由 Agent 按需编排 API 与交互界面而生成的可交互应用。每个灵动应用都拥有持久的身份与状态，可随用户意图持续演化、沉淀并复用——它不是一次性工具，而是属于用户的"活的"应用。 |
-| ③ | **Bridge App** | 桥接应用 | 在传统 GUI 应用之上叠加操作 Agent，保留原生界面的同时让 Agent 作为协作层，将存量软件接入 Agentic OS 生态。 |
+first_screen_screenshot
 
 ---
 
-## 远程遥控
+## 构建理念
 
-扫码配对，手机即刻变成桌面 Agent 的远程指挥中心。一条消息，桌面上的 AI 立刻开始工作。
+BitFun 围绕 **Agentic OS + 智能应用** 来组织整个产品：
 
-除手机浏览器扫码外，也支持接入 Telegram / 飞书 Bot/ 微信 Bot 远程下达指令，并实时查看 Agent 的执行进度。
+- **Agentic OS**：作为统一操作层，负责承载任务、工作区、会话、工具链与远程入口，让 AI 从一次性回答升级为可持续运行的工作系统。
+- **智能应用（Agent App / Live App / Bridge App）**：作为一等公民应用承载不同能力形态。既可以是具备自主推理与执行能力的 Agent 应用，也可以是按需生成、可持续演化的灵动应用，或与传统 GUI 软件协同工作的桥接应用。
+- **开发套件（Dev Kit）**：面向智能应用开发，帮助用户基于 Skills、Tools、MCP 等能力组件构建、调试并扩展自己的应用。
+- **统一调度与统一入口**：用户不需要在“模式”里做选择，而是在同一系统里直接进入具体应用、具体任务和具体工作流。
 
-## 双模式协同
 
-BitFun 提供两种模式，适配不同场景需求：
+## 智能应用
 
-- **助理模式（Assistant Mode）**：有温度，记住偏好，具备长期记忆。适合持续协作类任务，如维护项目、延续你的审美与工作习惯。
-- **专业模式（Professional Mode）**：省 token，直达执行，干净上下文。适合即时执行类任务，如修一个 bug、改一处样式。
+BitFun 的智能应用是 Agentic OS 的一等公民，全部可在统一的**应用中心**中访问和管理：
+
+
+| 类别             | 定位        | 说明                                                |
+| -------------- | --------- | ------------------------------------------------- |
+| **Agent App**  | 自主执行型智能应用 | 由一个或多个 Agent 组成，以对话与任务流为主要交互载体，适合持续执行的重执行、轻交互的工作场景。 |
+| **Live App**   | 可交互生成式应用  | 由 Agent 按需生成界面与能力，给用户最适合自己工作流的交互界面，具备持久身份和状态，可持续演化与复用。             |
+| **Bridge App** | 传统软件桥接应用  | 在既有 GUI 软件之上叠加操作 Agent，让存量软件接入 Agentic OS 的工作流。   |
+
+
+当前内置应用：
+
+
+| 应用         | 定位     | 说明                                                  |
+| ---------- | ------ | --------------------------------------------------- |
+| **Code**   | 面向软件开发 | 由 Agentic、Plan、Debug、Review 等工作流组成，覆盖实现、规划、排障与代码审查。 |
+| **Cowork** | 面向办公协作 | 适合整理需求、起草内容、推进日常事务与知识工作。                            |
+| **Design** | 面向设计探索 | 用于 HTML 原型、视觉稿与设计协作场景。                              |
+| **Claw**   | 面向持续协作 | 面向个人助理式协作，保留上下文、偏好与长期记忆。                            |
+
 
 ---
 
-## Agent 体系
-
-
-| Agent            | 定位         | 核心能力                                                                    |
-| ---------------- | ---------- | ----------------------------------------------------------------------- |
-| **个人助理**         | 你专属的 AI 伙伴 | 长期记忆、个性设定；按需调度 Code / Cowork / 自定义 Agent，并可自我迭代成长                       |
-| **Code Agent**   | 代码代理       | 四种模式：Agentic（自主读改跑验证）/ Plan（先规划后执行）/ Debug（插桩取证→根因定位）/ Review（基于仓库规范审查） |
-| **Cowork Agent** | 知识工作代理     | 内置 PDF / DOCX / XLSX / PPTX 处理，可从 Skill 市场按需获取和扩展能力包                    |
-| **自定义 Agent**    | 垂域专家       | 通过 Markdown 快速定义专属领域 Agent                                              |
-
-
-## 生态扩展
+## 开发套件（Dev Kit）
 
 > 它会自己成长。
 
-支持 Skill、MCP（包含MCP App）、自定义Agent，此外还支持即用即生的灵动应用（Live App，从一句需求生成可运行界面，并可一键打包成桌面应用）
+Agentic OS内置了场景的Tools等提供给用户构建自己的智能应用，同时支持接入外部的Skill、MCP（包含 MCP App）、自定义Sub Agent等作为Kit来构建智能应用。
 
 ---
 
@@ -112,7 +104,7 @@ pnpm run desktop:build
 
 ## 贡献
 
-欢迎大家贡献好的创意和代码，我们对 AI 生成代码抱有最大的接纳程度。请 PR 优先提交至 `dev` 分支，我们会定期审视后同步到主干。
+欢迎大家贡献好的创意和代码，我们对 AI 生成代码抱有最大的接纳程度。
 
 **我们重点关注的贡献方向：**
 

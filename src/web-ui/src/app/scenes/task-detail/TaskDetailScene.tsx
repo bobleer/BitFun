@@ -27,7 +27,7 @@ import {
 import { Search, FilterPill, FilterPillGroup, IconButton, confirmDanger } from '@/component-library';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import type { WorkspaceInfo } from '@/shared/types';
+import { isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
 import {
   compareSessionsForDisplay,
 } from '@/flow_chat/utils/sessionOrdering';
@@ -49,6 +49,19 @@ import './TaskDetailScene.scss';
 
 const log = createLogger('TaskDetailScene');
 const RECENT_WORKSPACE_LIMIT = 7;
+
+/** Secondary line: full path; remote workspaces use `host:path` when applicable. */
+function getWorkspaceFullPathDisplay(workspace: WorkspaceInfo): string {
+  const path = workspace.rootPath?.trim() ?? '';
+  if (!path) return '';
+  if (isRemoteWorkspace(workspace)) {
+    const host = workspace.sshHost?.trim();
+    if (host && host.toLowerCase() !== 'localhost') {
+      return `${host}:${path}`;
+    }
+  }
+  return path;
+}
 
 /** Agentic (dispatcher) session title: `2007.1.2` — dotted date, no leading zeros on month/day. */
 function formatAgenticDotDate(ts: number): string {
@@ -254,6 +267,8 @@ interface ExecSessionGroup {
   id: string;
   kind: ExecGroupingMode;
   title: string;
+  /** Full path line when `kind === 'workspace'` (omitted if same as title). */
+  pathSubtitle?: string;
   mode?: ExecMode;
   rows: ExecSessionRow[];
 }
@@ -287,6 +302,10 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
   onClose,
 }) => {
   const { t } = useI18n('common');
+  const fullPath = getWorkspaceFullPathDisplay(workspace);
+  const primaryName = workspace.name?.trim() ?? '';
+  const showPathSecondary = Boolean(fullPath && fullPath !== primaryName);
+
   return (
     <div
       className={[
@@ -303,6 +322,11 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
       </span>
       <span className="tds-ws-row__body">
         <span className="tds-ws-row__title">{workspace.name}</span>
+        {showPathSecondary ? (
+          <span className="tds-ws-row__path" title={fullPath}>
+            {fullPath}
+          </span>
+        ) : null}
         <span className="tds-ws-row__meta">
           {isCurrentWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeCurrent')}</span>}
           {!isOpenedWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeRecent')}</span>}
@@ -643,10 +667,19 @@ const TaskDetailScene: React.FC = () => {
         ? (row.workspace.name || fallbackWorkspaceFolderLabel(row.workspace.rootPath))
         : MODE_LABELS[row.mode];
 
+      const pathSubtitle = execGroupingMode === 'workspace'
+        ? (() => {
+            const fp = getWorkspaceFullPathDisplay(row.workspace);
+            if (!fp || fp.trim() === title.trim()) return undefined;
+            return fp;
+          })()
+        : undefined;
+
       groups.set(key, {
         id: key,
         kind: execGroupingMode,
         title,
+        pathSubtitle,
         mode: execGroupingMode === 'agent' ? row.mode : undefined,
         rows: [row],
       });
@@ -911,7 +944,14 @@ const TaskDetailScene: React.FC = () => {
                         ) : (
                           <ModeIcon mode={group.mode ?? 'code'} size={12} className={`tds-rail-group__icon tds-rail-group__icon--${group.mode ?? 'code'}`} />
                         )}
-                        <span className="tds-rail-group__title">{group.title}</span>
+                        <div className="tds-rail-group__head-text">
+                          <span className="tds-rail-group__title">{group.title}</span>
+                          {group.pathSubtitle ? (
+                            <span className="tds-rail-group__path" title={group.pathSubtitle}>
+                              {group.pathSubtitle}
+                            </span>
+                          ) : null}
+                        </div>
                         <span className="tds-rail-group__count">{group.rows.length}</span>
                       </div>
                       <div className="tds-rail-group__list">
