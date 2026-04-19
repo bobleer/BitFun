@@ -14,6 +14,9 @@ import './GenerativeWidgetToolCard.scss';
 
 const log = createLogger('GenerativeWidgetToolCard');
 
+/** Matches `BaseToolCard` loading shimmer statuses — UI is still being produced. */
+const GENERATING_UI_STATUSES = new Set(['preparing', 'streaming', 'running', 'analyzing']);
+
 type WidgetResult = {
   widget_id?: string;
   title?: string;
@@ -82,6 +85,10 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
   const failureText = toolResult?.error || 'Widget rendering failed.';
   const widgetId = resultData?.widget_id || toolCall?.id || toolItem.id;
   const hasRenderableWidget = widgetCode.trim().length > 0 && !isFailed;
+
+  const isGeneratingUi =
+    !isFailed &&
+    (isParamsStreaming === true || GENERATING_UI_STATUSES.has(status));
 
   const captureRootRef = useRef<HTMLDivElement>(null);
   const exportPreviewRef = useRef<HTMLDivElement>(null);
@@ -184,7 +191,16 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
   );
 
   const expandedBody = (
-    <div ref={captureRootRef} className="generative-widget-card__capture-root">
+    <div
+      ref={captureRootRef}
+      className={[
+        'generative-widget-card__capture-root',
+        isGeneratingUi && 'generative-widget-card__capture-root--generating',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      aria-busy={isGeneratingUi || undefined}
+    >
       {previewInner}
     </div>
   );

@@ -53,6 +53,7 @@ const SkillsScene: React.FC = () => {
 
   const [deleteTarget, setDeleteTarget] = useState<SkillInfo | null>(null);
   const [installedListPage, setInstalledListPage] = useState(0);
+  const [installedSearch, setInstalledSearch] = useState('');
   const [selectedDetail, setSelectedDetail] = useState<
     | { type: 'installed'; skill: SkillInfo }
     | { type: 'market'; skill: SkillMarketItem }
@@ -60,7 +61,7 @@ const SkillsScene: React.FC = () => {
   >(null);
 
   const installed = useInstalledSkills({
-    searchQuery: searchDraft,
+    searchQuery: installedSearch,
     activeFilter: installedFilter,
   });
 
@@ -128,7 +129,7 @@ const SkillsScene: React.FC = () => {
 
   useEffect(() => {
     setInstalledListPage(0);
-  }, [installedFilter, searchDraft]);
+  }, [installedFilter, installedSearch]);
 
   useEffect(() => {
     setInstalledListPage((p) => Math.min(p, Math.max(0, installedTotalPages - 1)));
@@ -148,37 +149,33 @@ const SkillsScene: React.FC = () => {
 
   return (
     <div className="bitfun-skills-scene">
+      {/* ── Top header ── */}
+      <header className="skills-scene__header">
+        <div className="skills-scene__identity">
+          <h1 className="skills-scene__title">{t('page.title')}</h1>
+          <div className="skills-scene__subline">
+            <p className="skills-scene__subtitle">{t('page.subtitle')}</p>
+            <div className="skills-scene__actions">
+              <button
+                type="button"
+                className="skills-split__add-btn"
+                onClick={toggleAddForm}
+              >
+                <Plus size={14} />
+                <span>{t('toolbar.addTooltip')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
       {/* ── Two-column split layout ── */}
       <div className="skills-split">
 
         {/* ══ LEFT: market skills ══ */}
         <div className="skills-split__left">
-          {/* Sticky header */}
+          {/* Market panel header */}
           <div className="skills-split__left-header">
-            <div className="skills-split__left-title-row">
-              <div className="skills-split__left-identity">
-                <h1 className="skills-split__title">{t('page.title')}</h1>
-                <p className="skills-split__subtitle">{t('page.subtitle')}</p>
-              </div>
-            </div>
-
-            <div className="skills-split__toolbar">
-              <Search
-                className="skills-split__search"
-                value={searchDraft}
-                onChange={setSearchDraft}
-                onSearch={submitMarketQuery}
-                onClear={submitMarketQuery}
-                placeholder={t('page.searchPlaceholder')}
-                size="large"
-                clearable
-                enterToSearch
-              />
-            </div>
-          </div>
-
-          {/* Market body — fixed display, no scroll */}
-          <div className="skills-split__left-body">
             <div className="skills-split__section-head">
               <span className="skills-split__section-title">{t('market.title')}</span>
               <span className="skills-split__section-sub">
@@ -188,6 +185,20 @@ const SkillsScene: React.FC = () => {
                 {t('market.subtitleSuffix')}
               </span>
             </div>
+            <Search
+              className="skills-split__panel-search"
+              value={searchDraft}
+              onChange={setSearchDraft}
+              onSearch={submitMarketQuery}
+              onClear={submitMarketQuery}
+              placeholder={t('page.searchPlaceholder')}
+              size="small"
+              clearable
+              enterToSearch
+            />
+          </div>
+          {/* Market body — scrollable */}
+          <div className="skills-split__left-body">
 
             {/* Market loading — skeleton grid */}
             {market.marketLoading && marketSkeletonGrid('mkt-init')}
@@ -294,8 +305,21 @@ const SkillsScene: React.FC = () => {
             {/* Right header */}
             <div className="skills-split__right-header">
               <span className="skills-split__right-title">{t('installed.titleAll')}</span>
-              <div className="skills-split__right-toolbar">
-                <div className="skills-split__filter-bar">
+              <Search
+                className="skills-split__panel-search skills-split__panel-search--installed"
+                value={installedSearch}
+                onChange={setInstalledSearch}
+                onClear={() => setInstalledSearch('')}
+                placeholder={t('page.searchPlaceholder')}
+                size="small"
+                clearable
+              />
+            </div>
+
+            <div className="skills-split__right-workbench">
+              {/* Category sidebar */}
+              <aside className="skills-split__right-sidebar">
+                <div className="skills-split__sidebar-scroll">
                   {([
                     ['all', installed.counts.all],
                     ['user', installed.counts.user],
@@ -305,29 +329,21 @@ const SkillsScene: React.FC = () => {
                       key={filter}
                       type="button"
                       className={[
-                        'skills-split__filter-chip',
+                        'skills-split__sidebar-item',
                         installedFilter === filter && 'is-active',
                       ].filter(Boolean).join(' ')}
                       onClick={() => setInstalledFilter(filter)}
                     >
                       <span>{t(`filters.${filter}`)}</span>
-                      <span className="skills-split__filter-count">{count}</span>
+                      <span className="skills-split__sidebar-count">{count}</span>
                     </button>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  className="skills-split__add-btn"
-                  onClick={toggleAddForm}
-                >
-                  <Plus size={14} />
-                  <span>{t('toolbar.addTooltip')}</span>
-                </button>
-              </div>
-            </div>
+              </aside>
 
-            {/* Scrollable installed body */}
-            <div className="skills-split__right-body">
+              {/* Scrollable installed list */}
+              <div className="skills-split__right-list">
+                <div className="skills-split__right-body">
               {/* Loading — row skeletons */}
               {installed.loading && (
                 <div className="skills-split__skeleton-list" aria-busy="true" aria-label={t('list.loading')}>
@@ -373,80 +389,82 @@ const SkillsScene: React.FC = () => {
 
               {/* Installed rows */}
               {!installed.loading && !installed.error && pagedInstalledSkills.map((skill, index) => (
-              <div
-                key={skill.key}
-                className="skills-split__installed-row"
-                style={{ '--row-index': index } as React.CSSProperties}
-                onClick={() => setSelectedDetail({ type: 'installed', skill })}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelectedDetail({ type: 'installed', skill });
-                  }
-                }}
-                aria-label={skill.name}
-              >
-                <div className="skills-split__row-icon">
-                  <Puzzle size={14} strokeWidth={1.6} />
-                </div>
-                <div className="skills-split__row-body">
-                  <span className="skills-split__row-name">{skill.name}</span>
-                  {skill.description?.trim() && (
-                    <span className="skills-split__row-desc">{skill.description}</span>
-                  )}
-                </div>
                 <div
-                  className="skills-split__row-end"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
+                  key={skill.key}
+                  className="skills-split__installed-row"
+                  style={{ '--row-index': index } as React.CSSProperties}
+                  onClick={() => setSelectedDetail({ type: 'installed', skill })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedDetail({ type: 'installed', skill });
+                    }
+                  }}
+                  aria-label={skill.name}
                 >
-                  <Badge variant={skill.level === 'user' ? 'info' : 'purple'}>
-                    {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
-                  </Badge>
-                  <button
-                    type="button"
-                    className="skills-split__row-delete"
-                    onClick={() => setDeleteTarget(skill)}
-                    aria-label={t('list.item.deleteTooltip')}
-                    title={t('list.item.deleteTooltip')}
+                  <div className="skills-split__row-icon">
+                    <Puzzle size={14} strokeWidth={1.6} />
+                  </div>
+                  <div className="skills-split__row-body">
+                    <span className="skills-split__row-name">{skill.name}</span>
+                    {skill.description?.trim() && (
+                      <span className="skills-split__row-desc">{skill.description}</span>
+                    )}
+                  </div>
+                  <div
+                    className="skills-split__row-end"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                   >
-                    <Trash2 size={13} />
-                  </button>
+                    <Badge variant={skill.level === 'user' ? 'info' : 'purple'}>
+                      {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
+                    </Badge>
+                    <button
+                      type="button"
+                      className="skills-split__row-delete"
+                      onClick={() => setDeleteTarget(skill)}
+                      aria-label={t('list.item.deleteTooltip')}
+                      title={t('list.item.deleteTooltip')}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
-              </div>
               ))}
-            </div>
+                </div>{/* end right-body */}
 
-            {!installed.loading && !installed.error && installedFiltered.length > 0 && installedTotalPages > 1 && (
-              <div className="skills-split__pagination skills-split__pagination--installed">
-                <button
-                  type="button"
-                  className="skills-split__page-btn"
-                  onClick={() => setInstalledListPage((p) => Math.max(0, p - 1))}
-                  disabled={currentInstalledPage === 0}
-                  aria-label={t('market.pagination.prev')}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="skills-split__page-info">
-                  {t('market.pagination.info', {
-                    current: currentInstalledPage + 1,
-                    total: installedTotalPages,
-                  })}
-                </span>
-                <button
-                  type="button"
-                  className="skills-split__page-btn"
-                  onClick={() => setInstalledListPage((p) => Math.min(installedTotalPages - 1, p + 1))}
-                  disabled={currentInstalledPage >= installedTotalPages - 1}
-                  aria-label={t('market.pagination.next')}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
+                {!installed.loading && !installed.error && installedFiltered.length > 0 && installedTotalPages > 1 && (
+                  <div className="skills-split__pagination skills-split__pagination--installed">
+                    <button
+                      type="button"
+                      className="skills-split__page-btn"
+                      onClick={() => setInstalledListPage((p) => Math.max(0, p - 1))}
+                      disabled={currentInstalledPage === 0}
+                      aria-label={t('market.pagination.prev')}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="skills-split__page-info">
+                      {t('market.pagination.info', {
+                        current: currentInstalledPage + 1,
+                        total: installedTotalPages,
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      className="skills-split__page-btn"
+                      onClick={() => setInstalledListPage((p) => Math.min(installedTotalPages - 1, p + 1))}
+                      disabled={currentInstalledPage >= installedTotalPages - 1}
+                      aria-label={t('market.pagination.next')}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>{/* end right-list */}
+            </div>{/* end right-workbench */}
           </div>
         </div>
       </div>
