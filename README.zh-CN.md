@@ -1,11 +1,18 @@
 **中文**  [English](README.md)
 
-BitFun
+<div align="center">
 
-[GitHub release](https://github.com/GCWing/BitFun/releases)
-[Website](https://openbitfun.com/)
-[License: MIT](https://github.com/GCWing/BitFun/blob/main/LICENSE)
-[Platform](https://github.com/GCWing/BitFun)
+![BitFun](./png/BitFun_title.png)
+
+</div>
+<div align="center">
+
+[![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
+[![Website](https://img.shields.io/badge/Website-openbitfun.com-6f42c1?style=flat-square)](https://openbitfun.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://github.com/GCWing/BitFun)
+
+</div>
 
 ---
 
@@ -17,7 +24,7 @@ BitFun 是面向AI时代打造的Agentic OS，承载各类**智能应用**调度
 
 你只需要提出需求，无论是在**桌面端**直接发起，还是通过**手机、机器人**等入口远程指挥，**BitFun 都会在背后组织任务、衔接上下文，并让 AI 持续工作、持续沉淀，逐步贴合你的个人流程**。
 
-first_screen_screenshot
+![first_screen_screenshot](./png/first_screen_screenshot_CN.png)
 
 ---
 
