@@ -1,17 +1,18 @@
 [中文](README.zh-CN.md) | **English**
 
+<div align="center">
 
+![BitFun](./png/BitFun_title.png)
 
-BitFun
+</div>
+<div align="center">
 
+[![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
+[![Website](https://img.shields.io/badge/Website-openbitfun.com-6f42c1?style=flat-square)](https://openbitfun.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://github.com/GCWing/BitFun)
 
-
-[GitHub release](https://github.com/GCWing/BitFun/releases)
-[Website](https://openbitfun.com/)
-[License: MIT](https://github.com/GCWing/BitFun/blob/main/LICENSE)
-[Platform](https://github.com/GCWing/BitFun)
-
-
+</div>
 
 ---
 
@@ -23,7 +24,7 @@ You do not need to care about underlying structures such as sessions, workspaces
 
 You only need to state what you want. Whether you start directly from the **desktop app** or direct it remotely through your **phone or bots**, **BitFun organizes tasks, carries context forward, and keeps AI working continuously in the background, gradually adapting to your personal workflow**.
 
-first_screen_screenshot
+![first_screen_screenshot](./png/first_screen_screenshot.png)
 
 ---
 
