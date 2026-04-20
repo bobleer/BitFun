@@ -265,7 +265,9 @@ impl PersistenceManager {
         if workspace_path == self.path_manager.agentic_os_runtime_root() {
             fs::create_dir_all(self.project_sessions_dir(workspace_path))
                 .await
-                .map_err(|e| BitFunError::io(format!("Failed to create Agentic OS runtime: {}", e)))?;
+                .map_err(|e| {
+                    BitFunError::io(format!("Failed to create Agentic OS runtime: {}", e))
+                })?;
             return Ok(());
         }
 

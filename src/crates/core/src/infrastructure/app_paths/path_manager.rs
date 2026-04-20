@@ -349,6 +349,26 @@ impl PathManager {
             .join("ai_memories.json")
     }
 
+    /// Get the workspace-local design root directory: {project}/.design/
+    pub fn workspace_design_root(&self, workspace_path: &Path) -> PathBuf {
+        workspace_path.join(".design")
+    }
+
+    /// Get the shared workspace design tokens file: {project}/.design/tokens.json
+    pub fn workspace_design_tokens_file(&self, workspace_path: &Path) -> PathBuf {
+        self.workspace_design_root(workspace_path)
+            .join("tokens.json")
+    }
+
+    /// Get the workspace-local design artifact directory: {project}/.design/<artifact_id>/
+    pub fn workspace_design_artifact_dir(
+        &self,
+        workspace_path: &Path,
+        artifact_id: &str,
+    ) -> PathBuf {
+        self.workspace_design_root(workspace_path).join(artifact_id)
+    }
+
     fn project_runtime_slug(&self, workspace_path: &Path) -> String {
         let requested_path = workspace_path.to_path_buf();
         if let Some(slug) = self.cached_project_runtime_slug(&requested_path) {

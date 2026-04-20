@@ -359,7 +359,10 @@ pub async fn update_session_title(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .or_else(|| {
-                if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+                if matches!(
+                    request.storage_scope,
+                    Some(SessionStorageScopeDto::AgenticOs)
+                ) {
                     Some("")
                 } else {
                     None
@@ -411,7 +414,12 @@ pub async fn ensure_coordinator_session(
     }
 
     let wp = request.workspace_path.as_deref().unwrap_or("").trim();
-    if wp.is_empty() && !matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+    if wp.is_empty()
+        && !matches!(
+            request.storage_scope,
+            Some(SessionStorageScopeDto::AgenticOs)
+        )
+    {
         return Err("workspace_path is required when the session is not loaded".to_string());
     }
 
@@ -501,7 +509,10 @@ pub async fn compact_session(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .or_else(|| {
-                if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+                if matches!(
+                    request.storage_scope,
+                    Some(SessionStorageScopeDto::AgenticOs)
+                ) {
                     Some("")
                 } else {
                     None

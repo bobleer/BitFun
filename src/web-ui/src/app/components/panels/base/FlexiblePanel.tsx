@@ -25,6 +25,17 @@ const TerminalTabPanel = React.lazy(() =>
 const GenerativeWidgetPanel = React.lazy(() =>
   import('@/tools/generative-widget/GenerativeWidgetPanel')
 );
+
+const DesignCanvasPanel = React.lazy(() =>
+  import('@/tools/design-canvas/DesignCanvasPanel')
+);
+
+const DesignArtifactBrowser = React.lazy(() =>
+  import('@/tools/design-canvas/DesignArtifactBrowser')
+);
+const DesignTokensStudio = React.lazy(() =>
+  import('@/tools/design-canvas/DesignTokensStudio')
+);
 const TaskDetailPanel = React.lazy(() => 
   import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
     default: module.TaskDetailPanel 
@@ -545,6 +556,45 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             />
           </React.Suspense>
         );
+
+      case 'design-artifact': {
+        const designData = content.data || {};
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">正在加载设计画布…</div>}>
+            <DesignCanvasPanel
+              artifactId={designData.artifactId}
+              workspacePath={designData.workspacePath || workspacePath}
+              initialManifest={designData.manifest}
+            />
+          </React.Suspense>
+        );
+      }
+
+      case 'design-artifacts-browser': {
+        const browserData = content.data || {};
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">正在加载设计产物…</div>}>
+            <DesignArtifactBrowser
+              workspacePath={browserData.workspacePath || workspacePath}
+            />
+          </React.Suspense>
+        );
+      }
+
+      // `design-tokens` is a legacy alias for `design-tokens-studio` — both
+      // route to the Studio so old persisted tab layouts keep working.
+      case 'design-tokens':
+      case 'design-tokens-studio': {
+        const studioData = content.data || {};
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">正在加载设计令牌…</div>}>
+            <DesignTokensStudio
+              artifactId={studioData.artifactId}
+              scopePath={studioData.scopePath}
+            />
+          </React.Suspense>
+        );
+      }
       default:
         return (
           <div className="bitfun-flexible-panel__unknown-content">

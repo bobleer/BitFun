@@ -1,5 +1,5 @@
 use super::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DeepResearchAgent, DebugMode,
+    Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DebugMode, DeepResearchAgent,
     DesignMode, DispatcherMode, ExploreAgent, FileFinderAgent, GenerateDocAgent, InitAgent,
     PlanMode,
 };
@@ -1075,7 +1075,15 @@ mod tests {
 
     #[test]
     fn top_level_modes_default_to_auto() {
-        for agent_type in ["agentic", "Cowork", "Design", "Plan", "debug", "Claw", "Dispatcher"] {
+        for agent_type in [
+            "agentic",
+            "Cowork",
+            "Design",
+            "Plan",
+            "debug",
+            "Claw",
+            "Dispatcher",
+        ] {
             assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
         }
     }

@@ -1,12 +1,12 @@
 use crate::agentic::coordination::{
-    get_global_coordinator, DialogTriggerSource, DialogSubmissionPolicy, get_global_scheduler,
-    AgentSessionReplyRoute,
+    get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
+    DialogTriggerSource,
 };
 use crate::agentic::core::SessionConfig;
-use crate::agentic::SessionSummary;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::SessionSummary;
 use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -35,7 +35,10 @@ impl AgentDispatchTool {
         Self
     }
 
-    async fn normalize_workspace(workspace: &str, context: &ToolUseContext) -> BitFunResult<String> {
+    async fn normalize_workspace(
+        workspace: &str,
+        context: &ToolUseContext,
+    ) -> BitFunResult<String> {
         let workspace = workspace.trim();
         if workspace.is_empty() {
             return Err(BitFunError::tool("workspace cannot be empty".to_string()));
@@ -101,7 +104,6 @@ impl AgentDispatchTool {
         })?;
         Ok(format!("session-{}", session_id))
     }
-
 }
 
 #[derive(Debug, Deserialize)]
@@ -248,8 +250,14 @@ Parameters for "status":
         let action = input.get("action").and_then(|v| v.as_str()).unwrap_or("?");
         match action {
             "create" => {
-                let agent = input.get("agent_type").and_then(|v| v.as_str()).unwrap_or("agent");
-                let name = input.get("session_name").and_then(|v| v.as_str()).unwrap_or("New Session");
+                let agent = input
+                    .get("agent_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("agent");
+                let name = input
+                    .get("session_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("New Session");
                 format!("Create {} session: {}", agent, name)
             }
             "list" => "List workspaces and sessions".to_string(),
@@ -305,10 +313,7 @@ Parameters for "status":
                 // as a user message, enabling the Dispatcher to report task completion.
                 if let Some(briefing) = params.task_briefing.filter(|b| !b.trim().is_empty()) {
                     if let Some(scheduler) = get_global_scheduler() {
-                        let dispatcher_session_id = context
-                            .session_id
-                            .clone()
-                            .unwrap_or_default();
+                        let dispatcher_session_id = context.session_id.clone().unwrap_or_default();
                         let dispatcher_workspace = if let Some(root) = context.workspace_root() {
                             root.to_string_lossy().into_owned()
                         } else {
@@ -331,7 +336,9 @@ Parameters for "status":
                                 None,
                                 agent_type.clone(),
                                 Some(workspace.clone()),
-                                DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                                DialogSubmissionPolicy::for_source(
+                                    DialogTriggerSource::AgentSession,
+                                ),
                                 reply_route,
                                 None,
                             )
@@ -397,7 +404,8 @@ Parameters for "status":
                     // --- Recent project workspaces ---
                     let recent = ws_service.get_recent_workspaces().await;
                     for workspace_info in recent {
-                        let workspace_path = workspace_info.root_path.to_string_lossy().into_owned();
+                        let workspace_path =
+                            workspace_info.root_path.to_string_lossy().into_owned();
                         let path = Path::new(&workspace_path);
 
                         let sessions: Vec<SessionSummary> = if path.exists() {

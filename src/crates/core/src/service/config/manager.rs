@@ -617,10 +617,10 @@ pub(crate) fn migrate_0_0_0_to_1_0_0(mut config: Value) -> BitFunResult<Value> {
     if let Some(app) = config.get_mut("app").and_then(|v| v.as_object_mut()) {
         if !app.contains_key("ai_experience") {
             app.insert(
-                    "ai_experience".to_string(),
-                    serde_json::json!({
-                        "enable_session_title_generation": true
-                    }),
+                "ai_experience".to_string(),
+                serde_json::json!({
+                    "enable_session_title_generation": true
+                }),
             );
         }
     }

@@ -32,6 +32,9 @@ impl DesignMode {
                 "Write".to_string(),
                 "Edit".to_string(),
                 "Delete".to_string(),
+                "DesignTokens".to_string(),
+                // Structured design artifacts for the right-side Design Canvas tab
+                "DesignArtifact".to_string(),
                 // Utilities
                 "GetFileDiff".to_string(),
                 "Bash".to_string(),

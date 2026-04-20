@@ -19,7 +19,10 @@ pub async fn desktop_effective_session_storage_path(
     storage_scope: Option<SessionStorageScopeDto>,
 ) -> std::path::PathBuf {
     if matches!(storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
-        return app_state.workspace_service.path_manager().agentic_os_runtime_root();
+        return app_state
+            .workspace_service
+            .path_manager()
+            .agentic_os_runtime_root();
     }
     let workspace_path = workspace_path.unwrap_or_default();
     let conn = remote_connection_id

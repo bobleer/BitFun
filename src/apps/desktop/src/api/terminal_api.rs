@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use bitfun_core::infrastructure::get_path_manager_arc;
 use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::service::terminal::TerminalEvent;
@@ -22,7 +23,6 @@ use bitfun_core::service::terminal::{
     ShellInfo as CoreShellInfo, ShellType, SignalRequest as CoreSignalRequest, TerminalApi,
     TerminalConfig, WriteRequest as CoreWriteRequest,
 };
-use bitfun_core::infrastructure::get_path_manager_arc;
 
 pub struct TerminalState {
     api: Arc<Mutex<Option<TerminalApi>>>,

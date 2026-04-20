@@ -1,0 +1,185 @@
+/**
+ * Design artifacts browser — lists all artifacts in the current workspace with
+ * search, archive toggles, and quick "Open in Canvas" actions. Rendered as a
+ * dedicated `design-artifacts-browser` Tab in the right panel.
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Archive,
+  ArchiveRestore,
+  ExternalLink,
+  RefreshCcw,
+  Search,
+  Palette,
+} from 'lucide-react';
+import { useDesignArtifactStore } from './store/designArtifactStore';
+import { designArtifactAPI } from './api';
+import { ideControl } from '@/shared/services/ide-control';
+import { createLogger } from '@/shared/utils/logger';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import './DesignArtifactBrowser.scss';
+
+const log = createLogger('DesignArtifactBrowser');
+
+export interface DesignArtifactBrowserProps {
+  workspacePath?: string;
+}
+
+export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ workspacePath }) => {
+  const { workspacePath: currentWorkspacePath } = useCurrentWorkspace();
+  const artifacts = useDesignArtifactStore((s) => s.artifacts);
+  const [query, setQuery] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const effectiveWorkspacePath = workspacePath || currentWorkspacePath;
+
+  const refresh = useMemo(
+    () => async () => {
+      setIsLoading(true);
+      try {
+        await designArtifactAPI.list(effectiveWorkspacePath);
+      } catch (err) {
+        log.warn('Browser refresh failed', err);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [effectiveWorkspacePath]
+  );
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const filtered = useMemo(() => {
+    const items = Object.values(artifacts).map((s) => s.manifest);
+    const q = query.trim().toLowerCase();
+    return items
+      .filter((m) => (showArchived ? true : !m.archived_at))
+      .filter((m) => {
+        if (!q) return true;
+        return (
+          m.title.toLowerCase().includes(q) ||
+          m.id.toLowerCase().includes(q) ||
+          m.kind.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  }, [artifacts, query, showArchived]);
+
+  const openInCanvas = (id: string) => {
+    const manifest = artifacts[id]?.manifest;
+    if (!manifest) return;
+    ideControl.panel.open('design-artifact', {
+      position: 'right',
+      config: {
+        title: manifest.title,
+        data: { artifactId: manifest.id, manifest },
+        workspace_path: effectiveWorkspacePath,
+      },
+      options: { auto_focus: true, check_duplicate: true },
+    });
+  };
+
+  const toggleArchive = async (id: string, archived: boolean) => {
+    try {
+      await designArtifactAPI.archive(id, archived, effectiveWorkspacePath);
+    } catch (err) {
+      log.warn('toggleArchive failed', err);
+    }
+  };
+
+  return (
+    <div className="design-artifact-browser">
+      <div className="design-artifact-browser__toolbar">
+        <div className="design-artifact-browser__search">
+          <Search size={14} />
+          <input
+            type="text"
+            value={query}
+            placeholder="搜索产物…"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <label className="design-artifact-browser__archived-toggle">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+          />
+          显示已归档
+        </label>
+        <button type="button" className="design-artifact-browser__refresh" onClick={refresh}>
+          <RefreshCcw size={13} />
+          刷新
+        </button>
+      </div>
+
+      {isLoading && filtered.length === 0 ? (
+        <div className="design-artifact-browser__empty">正在加载产物…</div>
+      ) : filtered.length === 0 ? (
+        <div className="design-artifact-browser__empty">
+          <Palette size={20} />
+          <div>当前工作区还没有设计产物</div>
+          <div className="design-artifact-browser__empty-hint">
+            让设计 Agent 创建一个 — 完成后会自动出现在这里。
+          </div>
+        </div>
+      ) : (
+        <ul className="design-artifact-browser__list">
+          {filtered.map((m) => {
+            const archived = Boolean(m.archived_at);
+            return (
+              <li
+                key={m.id}
+                className={`design-artifact-browser__item${
+                  archived ? ' design-artifact-browser__item--archived' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  className="design-artifact-browser__thumb"
+                  onClick={() => openInCanvas(m.id)}
+                >
+                  <Palette size={18} />
+                </button>
+                <div className="design-artifact-browser__meta">
+                  <div className="design-artifact-browser__title">{m.title}</div>
+                  <div className="design-artifact-browser__subtitle">
+                    <code>{m.id}</code>
+                    <span>{m.kind}</span>
+                    <span>{m.files.length} 个文件</span>
+                    <span>{m.versions.length} 次快照</span>
+                    {m.current_version && <code>v{m.current_version.slice(0, 8)}</code>}
+                  </div>
+                </div>
+                <div className="design-artifact-browser__actions">
+                  <button
+                    type="button"
+                    className="design-artifact-browser__action"
+                    onClick={() => openInCanvas(m.id)}
+                    title="在画布打开"
+                  >
+                    <ExternalLink size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="design-artifact-browser__action"
+                    onClick={() => toggleArchive(m.id, !archived)}
+                    title={archived ? '取消归档' : '归档'}
+                  >
+                    {archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+export default DesignArtifactBrowser;

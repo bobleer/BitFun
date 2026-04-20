@@ -1,7 +1,9 @@
 //! Session persistence API
 
 use crate::api::app_state::AppState;
-use crate::api::session_storage_path::{desktop_effective_session_storage_path, SessionStorageScopeDto};
+use crate::api::session_storage_path::{
+    desktop_effective_session_storage_path, SessionStorageScopeDto,
+};
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::session::{
@@ -186,7 +188,11 @@ async fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> 
             } else {
                 if let Some(parent) = target_path.parent() {
                     fs::create_dir_all(parent).await.map_err(|e| {
-                        format!("Failed to create parent directory {}: {}", parent.display(), e)
+                        format!(
+                            "Failed to create parent directory {}: {}",
+                            parent.display(),
+                            e
+                        )
                     })?;
                 }
                 fs::copy(&source_path, &target_path).await.map_err(|e| {
@@ -230,7 +236,9 @@ async fn migrate_legacy_dispatcher_sessions_if_needed(
             .into_iter()
             .filter(|item| item.agent_type.eq_ignore_ascii_case("dispatcher"))
         {
-            let source_dir = path_manager.project_sessions_dir(&legacy_root).join(&metadata.session_id);
+            let source_dir = path_manager
+                .project_sessions_dir(&legacy_root)
+                .join(&metadata.session_id);
             let target_dir = target_sessions_dir.join(&metadata.session_id);
             if target_dir.exists() || !source_dir.exists() {
                 continue;
@@ -257,7 +265,10 @@ pub async fn list_persisted_sessions(
     .await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-    if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+    if matches!(
+        request.storage_scope,
+        Some(SessionStorageScopeDto::AgenticOs)
+    ) {
         migrate_legacy_dispatcher_sessions_if_needed(
             &manager,
             path_manager.inner().as_ref(),
@@ -288,7 +299,10 @@ pub async fn load_session_turns(
     .await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-    if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+    if matches!(
+        request.storage_scope,
+        Some(SessionStorageScopeDto::AgenticOs)
+    ) {
         migrate_legacy_dispatcher_sessions_if_needed(
             &manager,
             path_manager.inner().as_ref(),
@@ -326,7 +340,10 @@ pub async fn save_session_turn(
     .await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-    if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+    if matches!(
+        request.storage_scope,
+        Some(SessionStorageScopeDto::AgenticOs)
+    ) {
         migrate_legacy_dispatcher_sessions_if_needed(
             &manager,
             path_manager.inner().as_ref(),
