@@ -526,7 +526,10 @@ pub async fn live_app_worker_call(
 }
 
 #[tauri::command]
-pub async fn live_app_worker_stop(state: State<'_, AppState>, app_id: String) -> Result<(), String> {
+pub async fn live_app_worker_stop(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<(), String> {
     if let Some(ref pool) = state.js_worker_pool {
         pool.stop(&app_id).await;
     }

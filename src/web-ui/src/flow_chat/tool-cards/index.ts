@@ -40,6 +40,8 @@ import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitLiveAppDisplay } from './InitLiveAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
+import { DesignArtifactIndexCard } from './DesignArtifactIndexCard';
+import { DesignTokensProposalCard } from './DesignTokensProposalCard';
 import { BtwMarkerCard } from './BtwMarkerCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
@@ -335,6 +337,26 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'detailed',
     primaryColor: '#38bdf8'
   },
+  'DesignArtifact': {
+    toolName: 'DesignArtifact',
+    displayName: 'Design Artifact',
+    icon: 'DA',
+    requiresConfirmation: false,
+    resultDisplayType: 'summary',
+    description: 'Create and evolve design artifacts in the Design Canvas tab',
+    displayMode: 'compact',
+    primaryColor: '#a78bfa'
+  },
+  'DesignTokens': {
+    toolName: 'DesignTokens',
+    displayName: 'Design Tokens',
+    icon: 'DT',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Propose and commit design token palettes',
+    displayMode: 'detailed',
+    primaryColor: '#7dd3fc'
+  },
 };
 
 // Tool card component map - uses backend tool names
@@ -396,6 +418,10 @@ export const TOOL_CARD_COMPONENTS = {
 
   // Generative widget tool
   'GenerativeUI': GenerativeWidgetToolCard,
+
+  // Design artifact (right-side Design Canvas)
+  'DesignArtifact': DesignArtifactIndexCard,
+  'DesignTokens': DesignTokensProposalCard,
 };
 
 /**

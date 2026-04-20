@@ -27,7 +27,10 @@ export type PanelContentType =
   | 'plan-viewer'
   | 'btw-session'
   | 'terminal'
-  | 'generative-widget';
+  | 'generative-widget'
+  | 'design-artifact'
+  | 'design-artifacts-browser'
+  | 'design-tokens-studio';
 
 export interface PanelContent {
   type: PanelContentType;

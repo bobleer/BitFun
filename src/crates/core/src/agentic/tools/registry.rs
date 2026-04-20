@@ -127,6 +127,12 @@ impl ToolRegistry {
         self.register_tool(Arc::new(GetMCPPromptTool::new()));
 
         self.register_tool(Arc::new(GenerativeUITool::new()));
+
+        // DesignTokens tool (Design mode — token alignment / proposal / commit)
+        self.register_tool(Arc::new(DesignTokensTool::new()));
+
+        // DesignArtifact tool (Design mode — produces right-panel Design Canvas artifacts)
+        self.register_tool(Arc::new(DesignArtifactTool::new()));
         // GetFileDiff tool
         self.register_tool(Arc::new(GetFileDiffTool::new()));
 

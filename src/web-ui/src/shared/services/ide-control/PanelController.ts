@@ -168,6 +168,39 @@ export class PanelController implements IdeController {
             isSvg: config.data?.isSvg,
           },
         };
+
+      case 'design-artifact':
+        return {
+          ...baseDetail,
+          title: config.title || config.data?.manifest?.title || 'Design Canvas',
+          data: {
+            ...baseDetail.data,
+            artifactId: config.data?.artifactId || config.data?.manifest?.id,
+            manifest: config.data?.manifest,
+            workspacePath: config.workspace_path || config.data?.workspacePath,
+          },
+        };
+
+      case 'design-artifacts-browser':
+        return {
+          ...baseDetail,
+          title: config.title || 'Designs',
+          data: {
+            ...baseDetail.data,
+            workspacePath: config.workspace_path || config.data?.workspacePath,
+          },
+        };
+      case 'design-tokens-studio':
+        return {
+          ...baseDetail,
+          title: config.title || 'Design Tokens',
+          data: {
+            ...baseDetail.data,
+            artifactId: config.data?.artifactId,
+            scopePath: config.data?.scopePath,
+            workspacePath: config.workspace_path || config.data?.workspacePath,
+          },
+        };
       case 'code-editor':
       case 'file-viewer':
       case 'markdown-editor':
@@ -204,6 +237,16 @@ export class PanelController implements IdeController {
         return config.file_path || t('common:tabs.markdown');
       case 'generative-widget':
         return config.title || 'Widget Preview';
+      case 'design-artifact':
+        return (
+          config.title ||
+          config.data?.manifest?.title ||
+          (config.data?.artifactId ? `Design · ${config.data.artifactId}` : 'Design Canvas')
+        );
+      case 'design-artifacts-browser':
+        return config.title || 'Designs';
+      case 'design-tokens-studio':
+        return config.title || 'Design Tokens';
       default:
         return panelType;
     }
@@ -221,6 +264,16 @@ export class PanelController implements IdeController {
       case 'git-settings':
         
         return panelType;
+      case 'design-artifact':
+        return config.data?.artifactId
+          ? `design-artifact-${config.data.artifactId}`
+          : `design-artifact-${Date.now()}`;
+      case 'design-artifacts-browser':
+        return 'design-artifacts-browser';
+      case 'design-tokens-studio':
+        return config.data?.artifactId
+          ? `design-tokens-studio-${config.data.artifactId}`
+          : 'design-tokens-studio';
       default:
         return `${panelType}-${Date.now()}`;
     }

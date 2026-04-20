@@ -1,6 +1,6 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
-use crate::agentic::persistence::PersistenceManager;
 use super::request_context::{RequestContextPolicy, RequestContextSection};
+use crate::agentic::persistence::PersistenceManager;
 use crate::infrastructure::PathManager;
 use crate::service::agent_memory::{
     build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,

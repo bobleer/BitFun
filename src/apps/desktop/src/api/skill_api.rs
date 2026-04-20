@@ -28,9 +28,9 @@ use bitfun_core::agentic::tools::implementations::skills::{
 };
 use bitfun_core::agentic::workspace::RemoteWorkspaceFs;
 use bitfun_core::infrastructure::get_path_manager_arc;
+use bitfun_core::infrastructure::APP_HIDDEN_DIR_NAME;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
-use bitfun_core::infrastructure::APP_HIDDEN_DIR_NAME;
 use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::util::process_manager;
 

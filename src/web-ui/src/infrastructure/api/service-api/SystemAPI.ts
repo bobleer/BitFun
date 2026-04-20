@@ -2,7 +2,7 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { disable as autostartDisable, enable as autostartEnable, isEnabled as autostartIsEnabled } from '@tauri-apps/plugin-autostart';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -50,6 +50,16 @@ export class SystemAPI {
     } catch (error) {
       log.error('Failed to open external URL', { url, error });
       throw new Error(`Failed to open external URL: ${error}`);
+    }
+  }
+
+   
+  async openPath(path: string): Promise<void> {
+    try {
+      await openPath(path);
+    } catch (error) {
+      log.error('Failed to open external path', { path, error });
+      throw new Error(`Failed to open external path: ${error}`);
     }
   }
 

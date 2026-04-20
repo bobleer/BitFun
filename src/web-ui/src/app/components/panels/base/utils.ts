@@ -16,6 +16,7 @@ import {
   Image,
   Network,
   MessageSquareQuote,
+  Palette,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -166,8 +167,11 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     showHeader: false
   },
   'design-tokens': {
+    // Legacy alias — new call sites should use 'design-tokens-studio'. Kept
+    // here so old saved tab configs still resolve; FlexiblePanel routes both
+    // to the same DesignTokensStudio component.
     type: 'design-tokens',
-    displayName: 'Design Tokens',
+    displayName: '设计令牌',
     icon: Settings,
     supportsCopy: false,
     supportsDownload: false,
@@ -209,6 +213,30 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'generative-widget',
     displayName: 'Widget Preview',
     icon: Network,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'design-artifact': {
+    type: 'design-artifact',
+    displayName: '设计画布',
+    icon: Palette,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'design-artifacts-browser': {
+    type: 'design-artifacts-browser',
+    displayName: '设计产物',
+    icon: Palette,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'design-tokens-studio': {
+    type: 'design-tokens-studio',
+    displayName: '设计令牌',
+    icon: Palette,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

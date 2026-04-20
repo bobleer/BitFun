@@ -88,7 +88,11 @@ pub struct SessionMetadata {
         alias = "workspace_hostname"
     )]
     pub workspace_hostname: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "storage_scope")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "storage_scope"
+    )]
     pub storage_scope: Option<SessionStorageScope>,
 }
 

@@ -215,5 +215,4 @@ mod tests {
         assert!(second_report.skipped);
         assert_eq!(second_report.deleted_sessions, 0);
     }
-
 }
