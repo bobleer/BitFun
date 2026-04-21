@@ -353,6 +353,7 @@ pub async fn rollback_to_turn(
         use bitfun_core::agentic::coordination::get_global_coordinator;
 
         if let Some(coordinator) = get_global_coordinator() {
+            coordinator.cancel_auto_memory_for_session(&request.session_id);
             if let Err(e) = coordinator
                 .cancel_active_turn_for_session(&request.session_id, Duration::from_secs(2))
                 .await

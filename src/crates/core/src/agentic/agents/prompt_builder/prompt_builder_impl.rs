@@ -2,14 +2,12 @@
 use super::request_context::{RequestContextPolicy, RequestContextSection};
 use crate::agentic::persistence::PersistenceManager;
 use crate::infrastructure::PathManager;
-use crate::service::agent_memory::{
-    build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
-    build_workspace_memory_files_context,
-};
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
+use crate::service::instructions::build_instruction_files_context;
+use crate::service::memory_store::{build_memory_files_context, build_memory_prompt};
 use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
@@ -203,7 +201,7 @@ impl PromptBuilder {
         if self.context.remote_execution.is_none() {
             let workspace = Path::new(&self.context.workspace_path);
             if policy.includes(RequestContextSection::WorkspaceInstructions) {
-                match build_workspace_instruction_files_context(workspace).await {
+                match build_instruction_files_context(workspace).await {
                     Ok(Some(prompt)) => instruction_sections.push(prompt),
                     Ok(None) => {}
                     Err(e) => warn!(
@@ -214,7 +212,7 @@ impl PromptBuilder {
                 }
             }
             if policy.includes(RequestContextSection::WorkspaceMemoryFiles) {
-                match build_workspace_memory_files_context(workspace).await {
+                match build_memory_files_context(workspace).await {
                     Ok(Some(prompt)) => override_sections.push(prompt),
                     Ok(None) => {}
                     Err(e) => warn!(
@@ -508,7 +506,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
                     .to_string()
             } else {
                 let workspace = Path::new(&self.context.workspace_path);
-                match build_workspace_agent_memory_prompt(workspace).await {
+                match build_memory_prompt(workspace).await {
                     Ok(prompt) => prompt,
                     Err(e) => {
                         warn!(

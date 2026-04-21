@@ -1,0 +1,19 @@
+{
+  "title": "Memory",
+  "subtitle": "Configure background auto-memory extraction behavior",
+  "autoMemory": {
+    "sectionTitle": "Auto memory",
+    "sectionDescription": "Background extraction updates workspace memory files after conversations complete.",
+    "enabled": "Enable auto memory",
+    "enabledDesc": "",
+    "extractEveryEligibleTurns": "How often to update memory",
+    "extractEveryEligibleTurnsDesc": "Update memory once every N completed conversations."
+  },
+  "loading": {
+    "text": "Loading configuration..."
+  },
+  "messages": {
+    "saveSuccess": "Settings saved",
+    "saveFailed": "Save failed"
+  }
+}

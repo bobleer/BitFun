@@ -438,9 +438,24 @@ pub struct AIConfig {
     #[serde(default)]
     pub debug_mode_config: DebugModeConfig,
 
+    /// Auto-memory runtime behavior.
+    #[serde(default)]
+    pub auto_memory: AutoMemoryConfig,
+
     /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
+}
+
+/// Global auto-memory configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AutoMemoryConfig {
+    /// Whether background auto-memory extraction is enabled.
+    pub enabled: bool,
+
+    /// Run background extraction after every N eligible turns.
+    pub extract_every_eligible_turns: u32,
 }
 
 impl AIConfig {
@@ -577,6 +592,14 @@ fn default_tool_confirmation_timeout() -> Option<u64> {
 }
 
 fn default_skip_tool_confirmation() -> bool {
+    true
+}
+
+fn default_auto_memory_extract_every_eligible_turns() -> u32 {
+    1
+}
+
+fn default_auto_memory_enabled() -> bool {
     true
 }
 
@@ -1377,7 +1400,17 @@ impl Default for AIConfig {
             tool_confirmation_timeout_secs: default_tool_confirmation_timeout(),
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
+            auto_memory: AutoMemoryConfig::default(),
             computer_use_enabled: false,
+        }
+    }
+}
+
+impl Default for AutoMemoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_auto_memory_enabled(),
+            extract_every_eligible_turns: default_auto_memory_extract_every_eligible_turns(),
         }
     }
 }

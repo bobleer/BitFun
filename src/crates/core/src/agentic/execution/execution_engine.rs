@@ -1589,6 +1589,7 @@ impl ExecutionEngine {
                     total_rounds: round_index + 1,
                     total_tools,
                     duration_ms,
+                    hidden_session: context.hidden_session,
                     subagent_parent_info: event_subagent_parent_info,
                 },
                 None,

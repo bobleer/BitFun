@@ -76,6 +76,16 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/agentic-tools', key: 'config.executionTimeout' },
     { ns: 'settings/agentic-tools', key: 'config.executionTimeoutDesc' },
   ],
+  memory: [
+    { ns: 'settings/memory', key: 'title' },
+    { ns: 'settings/memory', key: 'subtitle' },
+    { ns: 'settings/memory', key: 'autoMemory.sectionTitle' },
+    { ns: 'settings/memory', key: 'autoMemory.sectionDescription' },
+    { ns: 'settings/memory', key: 'autoMemory.enabled' },
+    { ns: 'settings/memory', key: 'autoMemory.enabledDesc' },
+    { ns: 'settings/memory', key: 'autoMemory.extractEveryEligibleTurns' },
+    { ns: 'settings/memory', key: 'autoMemory.extractEveryEligibleTurnsDesc' },
+  ],
   editor: [
     { ns: 'settings/editor', key: 'title' },
     { ns: 'settings/editor', key: 'subtitle' },

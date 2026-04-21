@@ -5,14 +5,12 @@ use tokio::fs;
 const WORKSPACE_INSTRUCTION_FILE_NAMES: [&str; 2] = ["AGENTS.md", "CLAUDE.md"];
 
 #[derive(Debug)]
-struct WorkspaceInstructionFile {
+struct InstructionFile {
     name: String,
     content: String,
 }
 
-async fn load_workspace_instruction_files(
-    workspace_root: &Path,
-) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
+async fn load_instruction_files(workspace_root: &Path) -> BitFunResult<Vec<InstructionFile>> {
     let mut files = Vec::new();
 
     for file_name in WORKSPACE_INSTRUCTION_FILE_NAMES {
@@ -33,7 +31,7 @@ async fn load_workspace_instruction_files(
             continue;
         }
 
-        files.push(WorkspaceInstructionFile {
+        files.push(InstructionFile {
             name: file_name.to_string(),
             content,
         });
@@ -42,9 +40,7 @@ async fn load_workspace_instruction_files(
     Ok(files)
 }
 
-fn render_workspace_instruction_files_section(
-    files: &[WorkspaceInstructionFile],
-) -> Option<String> {
+fn render_instruction_files_section(files: &[InstructionFile]) -> Option<String> {
     if files.is_empty() {
         return None;
     }
@@ -63,11 +59,9 @@ fn render_workspace_instruction_files_section(
     Some(rendered.trim_end().to_string())
 }
 
-pub(crate) async fn build_workspace_instruction_files_context(
+pub(crate) async fn build_instruction_files_context(
     workspace_root: &Path,
 ) -> BitFunResult<Option<String>> {
-    let instruction_files = load_workspace_instruction_files(workspace_root).await?;
-    Ok(render_workspace_instruction_files_section(
-        &instruction_files,
-    ))
+    let instruction_files = load_instruction_files(workspace_root).await?;
+    Ok(render_instruction_files_section(&instruction_files))
 }

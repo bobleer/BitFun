@@ -1,0 +1,199 @@
+mod manifest;
+mod paths;
+mod policy;
+mod prompt_context;
+
+use crate::infrastructure::get_path_manager_arc;
+use crate::util::errors::*;
+use log::debug;
+use serde::Deserialize;
+use std::path::{Path, PathBuf};
+use tokio::fs;
+
+pub(crate) use manifest::build_memory_manifest;
+pub(crate) use paths::{ensure_memory_store_files, memory_store_dir_path};
+pub(crate) use policy::{build_shared_memory_policy_sections, SharedMemoryPolicyProfile};
+pub(crate) use prompt_context::{build_memory_files_context, build_memory_prompt};
+
+pub(crate) const MEMORY_INDEX_FILE: &str = "MEMORY.md";
+const MEMORY_DIR_NAME: &str = "memory";
+const LEGACY_MEMORY_INDEX_FILE: &str = "memory.md";
+const MEMORY_INDEX_TEMPLATE: &str = "# Memory Index\n";
+const MEMORY_INDEX_MAX_LINES: usize = 200;
+const TOPIC_MEMORY_MAX_FILES: usize = 30;
+const MEMORY_MANIFEST_MAX_FILES: usize = 200;
+
+fn memory_store_dir_path_impl(workspace_root: &Path) -> PathBuf {
+    let path_manager = get_path_manager_arc();
+    let path = path_manager.project_memory_dir(workspace_root);
+    debug!(
+        "Resolved memory store directory: workspace={} memory_dir={} storage_subdir={}",
+        workspace_root.display(),
+        path.display(),
+        MEMORY_DIR_NAME
+    );
+    path
+}
+
+pub(super) fn format_path_for_prompt(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+pub(super) async fn ensure_markdown_placeholder(path: &Path, content: &str) -> BitFunResult<bool> {
+    if path.exists() {
+        return Ok(false);
+    }
+
+    fs::write(path, content)
+        .await
+        .map_err(|e| BitFunError::service(format!("Failed to create {}: {}", path.display(), e)))?;
+
+    Ok(true)
+}
+
+pub(super) async fn migrate_legacy_memory_index(memory_dir: &Path) -> BitFunResult<()> {
+    let legacy_path = memory_dir.join(LEGACY_MEMORY_INDEX_FILE);
+    let canonical_path = memory_dir.join(MEMORY_INDEX_FILE);
+
+    if !legacy_path.exists() || canonical_path.exists() {
+        return Ok(());
+    }
+
+    fs::rename(&legacy_path, &canonical_path)
+        .await
+        .map_err(|e| {
+            BitFunError::service(format!(
+                "Failed to migrate legacy memory index {} -> {}: {}",
+                legacy_path.display(),
+                canonical_path.display(),
+                e
+            ))
+        })?;
+
+    Ok(())
+}
+
+pub(super) async fn list_memory_files(memory_dir: &Path) -> BitFunResult<Vec<String>> {
+    let mut memory_files = Vec::new();
+    let mut entries = fs::read_dir(memory_dir).await.map_err(|e| {
+        BitFunError::service(format!(
+            "Failed to read memory directory {}: {}",
+            memory_dir.display(),
+            e
+        ))
+    })?;
+
+    while let Some(entry) = entries.next_entry().await.map_err(|e| {
+        BitFunError::service(format!(
+            "Failed to iterate memory directory {}: {}",
+            memory_dir.display(),
+            e
+        ))
+    })? {
+        let file_type = entry.file_type().await.map_err(|e| {
+            BitFunError::service(format!(
+                "Failed to inspect memory entry {}: {}",
+                entry.path().display(),
+                e
+            ))
+        })?;
+        if !file_type.is_file() {
+            continue;
+        }
+
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        if file_name.ends_with(".md") && !file_name.eq_ignore_ascii_case(MEMORY_INDEX_FILE) {
+            memory_files.push(file_name);
+        }
+    }
+
+    memory_files.sort();
+
+    Ok(memory_files)
+}
+
+pub(super) async fn list_memory_files_recursive(memory_dir: &Path) -> BitFunResult<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    let mut pending_dirs = vec![memory_dir.to_path_buf()];
+
+    while let Some(dir) = pending_dirs.pop() {
+        let mut entries = fs::read_dir(&dir).await.map_err(|e| {
+            BitFunError::service(format!(
+                "Failed to read memory directory {}: {}",
+                dir.display(),
+                e
+            ))
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            BitFunError::service(format!(
+                "Failed to iterate memory directory {}: {}",
+                dir.display(),
+                e
+            ))
+        })? {
+            let file_type = entry.file_type().await.map_err(|e| {
+                BitFunError::service(format!(
+                    "Failed to inspect memory entry {}: {}",
+                    entry.path().display(),
+                    e
+                ))
+            })?;
+
+            if file_type.is_dir() {
+                pending_dirs.push(entry.path());
+                continue;
+            }
+
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            if file_name.ends_with(".md") && !file_name.eq_ignore_ascii_case(MEMORY_INDEX_FILE) {
+                files.push(entry.path());
+            }
+        }
+    }
+
+    files.sort();
+    Ok(files)
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct MemoryFrontmatter {
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default, rename = "type")]
+    pub memory_type: Option<String>,
+}
+
+pub(super) fn parse_memory_frontmatter(content: &str) -> Option<MemoryFrontmatter> {
+    let mut lines = content.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+
+    let mut yaml_lines = Vec::new();
+    let mut found_closing = false;
+    for line in lines {
+        if line.trim() == "---" {
+            found_closing = true;
+            break;
+        }
+        yaml_lines.push(line);
+    }
+
+    if !found_closing || yaml_lines.is_empty() {
+        return None;
+    }
+
+    serde_yaml::from_str::<MemoryFrontmatter>(&yaml_lines.join("\n")).ok()
+}
+
+pub(super) fn format_manifest_path(path: &Path, memory_dir: &Path) -> String {
+    path.strip_prefix(memory_dir)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}

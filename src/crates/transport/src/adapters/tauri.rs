@@ -190,6 +190,7 @@ impl TransportAdapter for TauriTransportAdapter {
             AgenticEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,
+                hidden_session,
                 subagent_parent_info,
                 ..
             } => {
@@ -198,6 +199,7 @@ impl TransportAdapter for TauriTransportAdapter {
                     json!({
                         "sessionId": session_id,
                         "turnId": turn_id,
+                        "hiddenSession": hidden_session,
                         "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;

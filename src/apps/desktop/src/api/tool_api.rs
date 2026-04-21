@@ -96,6 +96,7 @@ fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         custom_data: HashMap::new(),
         computer_use_host: None,
         cancellation_token: None,
+        runtime_tool_restrictions: Default::default(),
         workspace_services: None,
     }
 }

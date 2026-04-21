@@ -1,4 +1,5 @@
 use super::state::SessionState;
+use crate::agentic::auto_memory::AutoMemoryState;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -57,6 +58,9 @@ pub struct Session {
     /// Context compression related
     pub compression_state: CompressionState,
 
+    /// Durable auto-memory extraction progress
+    pub auto_memory_state: AutoMemoryState,
+
     /// Lifecycle
     pub created_at: SystemTime,
     pub updated_at: SystemTime,
@@ -93,6 +97,7 @@ impl Session {
             state: SessionState::Idle,
             config,
             compression_state: CompressionState::default(),
+            auto_memory_state: AutoMemoryState::default(),
             created_at: now,
             updated_at: now,
             last_activity_at: now,
@@ -117,6 +122,7 @@ impl Session {
             state: SessionState::Idle,
             config,
             compression_state: CompressionState::default(),
+            auto_memory_state: AutoMemoryState::default(),
             created_at: now,
             updated_at: now,
             last_activity_at: now,

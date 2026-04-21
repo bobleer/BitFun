@@ -155,12 +155,14 @@ impl TransportAdapter for WebSocketTransportAdapter {
             AgenticEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,
+                hidden_session,
                 ..
             } => {
                 json!({
                     "type": "dialog-turn-completed",
                     "sessionId": session_id,
                     "turnId": turn_id,
+                    "hiddenSession": hidden_session,
                 })
             }
             _ => return Ok(()),

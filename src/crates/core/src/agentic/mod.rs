@@ -16,6 +16,9 @@ pub mod execution;
 // Tools module
 pub mod tools;
 
+// Auto-memory orchestration
+pub mod auto_memory;
+
 // Coordination module
 pub mod coordination;
 

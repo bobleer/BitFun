@@ -13,6 +13,7 @@
       "models": "AI models, API keys, providers, and proxy.",
       "personalization": "Title generation, Agent companion, and debug mode.",
       "permissions": "Tool confirmation, timeouts, and desktop automation access.",
+      "memory": "Automatic memory extraction cadence and enablement.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
       "keyboard": "Shortcuts and key bindings."
@@ -28,6 +29,7 @@
       "models": "Models",
       "personalization": "Personalization",
       "permissions": "Permissions",
+      "memory": "Memory",
       "skills": "Skills",
       "agents": "Agents",
       "editor": "Editor",

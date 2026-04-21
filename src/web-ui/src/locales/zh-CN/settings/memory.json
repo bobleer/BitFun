@@ -1,0 +1,19 @@
+{
+  "title": "记忆",
+  "subtitle": "配置后台自动记忆提炼行为",
+  "autoMemory": {
+    "sectionTitle": "自动记忆",
+    "sectionDescription": "在对话完成后，后台提炼流程会更新工作区记忆文件。",
+    "enabled": "启用自动记忆",
+    "enabledDesc": "",
+    "extractEveryEligibleTurns": "记忆更新频率",
+    "extractEveryEligibleTurnsDesc": "每完成 N 轮对话，更新一次记忆。"
+  },
+  "loading": {
+    "text": "加载配置中..."
+  },
+  "messages": {
+    "saveSuccess": "设置已保存",
+    "saveFailed": "保存失败"
+  }
+}

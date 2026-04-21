@@ -143,6 +143,7 @@ export interface SubagentParentInfo {
 export interface AgenticEvent {
   sessionId: string;
   turnId?: string;
+  hiddenSession?: boolean;
   subagentParentInfo?: SubagentParentInfo;
   [key: string]: any;
 }

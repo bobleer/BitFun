@@ -174,7 +174,13 @@ export interface AIConfig {
   tool_execution_timeout_secs?: number | null;
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;
+  auto_memory?: AutoMemoryConfig;
   computer_use_enabled?: boolean;
+}
+
+export interface AutoMemoryConfig {
+  enabled: boolean;
+  extract_every_eligible_turns: number;
 }
 
 export interface StoredModeConfigItem {

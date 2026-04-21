@@ -78,6 +78,8 @@ pub enum AgenticEvent {
         total_rounds: usize,
         total_tools: usize,
         duration_ms: u64,
+        #[serde(default)]
+        hidden_session: bool,
         subagent_parent_info: Option<SubagentParentInfo>,
     },
 

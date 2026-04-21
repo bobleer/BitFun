@@ -48,6 +48,7 @@ import zhCNSettingsAppearance from '../../../locales/zh-CN/settings/appearance.j
 import zhCNSettingsBasics from '../../../locales/zh-CN/settings/basics.json';
 import zhCNSettingsPersonalization from '../../../locales/zh-CN/settings/personalization.json';
 import zhCNSettingsPermissions from '../../../locales/zh-CN/settings/permissions.json';
+import zhCNSettingsMemory from '../../../locales/zh-CN/settings/memory.json';
 import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.json';
 import zhCNSettingsDebug from '../../../locales/zh-CN/settings/debug.json';
 import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
@@ -80,6 +81,7 @@ import enUSSettingsAppearance from '../../../locales/en-US/settings/appearance.j
 import enUSSettingsBasics from '../../../locales/en-US/settings/basics.json';
 import enUSSettingsPersonalization from '../../../locales/en-US/settings/personalization.json';
 import enUSSettingsPermissions from '../../../locales/en-US/settings/permissions.json';
+import enUSSettingsMemory from '../../../locales/en-US/settings/memory.json';
 import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.json';
 import enUSSettingsDebug from '../../../locales/en-US/settings/debug.json';
 import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
@@ -119,6 +121,7 @@ const resources = {
     'settings/basics': zhCNSettingsBasics,
     'settings/personalization': zhCNSettingsPersonalization,
     'settings/permissions': zhCNSettingsPermissions,
+    'settings/memory': zhCNSettingsMemory,
     'settings/ai-features': zhCNSettingsAiFeatures,
     'settings/debug': zhCNSettingsDebug,
     'settings/editor': zhCNSettingsEditor,
@@ -152,6 +155,7 @@ const resources = {
     'settings/basics': enUSSettingsBasics,
     'settings/personalization': enUSSettingsPersonalization,
     'settings/permissions': enUSSettingsPermissions,
+    'settings/memory': enUSSettingsMemory,
     'settings/ai-features': enUSSettingsAiFeatures,
     'settings/debug': enUSSettingsDebug,
     'settings/editor': enUSSettingsEditor,
@@ -208,6 +212,7 @@ export class I18nService {
           'settings/basics',
           'settings/personalization',
           'settings/permissions',
+          'settings/memory',
           'settings/ai-features',
           'settings/debug',
           'settings/editor',
