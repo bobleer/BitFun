@@ -4,17 +4,8 @@ pub(crate) enum SharedMemoryPolicyProfile {
     Extraction,
 }
 
-pub(crate) fn build_shared_memory_policy_sections(
-    index_file_name: &str,
-    profile: SharedMemoryPolicyProfile,
-) -> String {
-    let explicit_request_guidance = match profile {
-        SharedMemoryPolicyProfile::Full => "If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find and remove the relevant entry.\n\n",
-        SharedMemoryPolicyProfile::Extraction => "",
-    };
-
-    let post_save_sections = match profile {
-        SharedMemoryPolicyProfile::Full => r#"
+const EXPLICIT_REQUEST_GUIDANCE: &str = "If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find and remove the relevant entry.\n\n";
+const POST_SAVE_SECTIONS: &str = r#"
 
 ## When to access memories
 - When memories seem relevant, or the user references prior-conversation work.
@@ -37,17 +28,9 @@ A memory that summarizes repo state (activity logs, architecture snapshots) is f
 ## Memory and other forms of persistence
 Memory is one of several persistence mechanisms available to you as you assist the user in a given conversation. The distinction is often that memory can be recalled in future conversations and should not be used for persisting information that is only useful within the scope of the current conversation.
 - When to use or update a plan instead of memory: If you are about to start a non-trivial implementation task and would like to reach alignment with the user on your approach you should use a Plan rather than saving this information to memory. Similarly, if you already have a plan within the conversation and you have changed your approach persist that change by updating the plan rather than saving a memory.
-- When to use or update tasks instead of memory: When you need to break your work in current conversation into discrete steps or keep track of your progress use tasks instead of saving to memory. Tasks are great for persisting information about the work that needs to be done in the current conversation, but memory should be reserved for information that will be useful in future conversations."#,
-        SharedMemoryPolicyProfile::Extraction => "",
-    };
+- When to use or update tasks instead of memory: When you need to break your work in current conversation into discrete steps or keep track of your progress use tasks instead of saving to memory. Tasks are great for persisting information about the work that needs to be done in the current conversation, but memory should be reserved for information that will be useful in future conversations."#;
 
-    format!(
-        r#"{explicit_request_guidance}## Types of memory
-
-There are several discrete types of memory that you can store in your memory system:
-
-<types>
-<type>
+const USER_MEMORY_TYPE: &str = r#"<type>
     <name>user</name>
     <description>Contain information about the user's role, goals, responsibilities, and knowledge. Great user memories help you tailor your future behavior to the user's preferences and perspective. Your goal in reading and writing these memories is to build up an understanding of who the user is and how you can be most helpful to them specifically. For example, you should collaborate with a senior software engineer differently than a student who is coding for the very first time. Keep in mind, that the aim here is to be helpful to the user. Avoid writing memories about the user that could be viewed as a negative judgement or that are not relevant to the work you're trying to accomplish together.</description>
     <when_to_save>When you learn any details about the user's role, preferences, responsibilities, or knowledge</when_to_save>
@@ -59,8 +42,9 @@ There are several discrete types of memory that you can store in your memory sys
     user: I've been writing Go for ten years but this is my first time touching the React side of this repo
     assistant: [saves user memory: deep Go expertise, new to React and this project's frontend — frame frontend explanations in terms of backend analogues]
     </examples>
-</type>
-<type>
+</type>"#;
+
+const FEEDBACK_MEMORY_TYPE: &str = r#"<type>
     <name>feedback</name>
     <description>Guidance the user has given you about how to approach work — both what to avoid and what to keep doing. These are a very important type of memory to read and write as they allow you to remain coherent and responsive to the way you should approach work in the project. Record from failure AND success: if you only save corrections, you will avoid past mistakes but drift away from approaches the user has already validated, and may grow overly cautious.</description>
     <when_to_save>Any time the user corrects your approach ("no not that", "don't", "stop doing X") OR confirms a non-obvious approach worked ("yes exactly", "perfect, keep doing that", accepting an unusual choice without pushback). Corrections are easy to notice; confirmations are quieter — watch for them. In both cases, save what is applicable to future conversations, especially if surprising or not obvious from the code. Include *why* so you can judge edge cases later.</when_to_save>
@@ -76,8 +60,9 @@ There are several discrete types of memory that you can store in your memory sys
     user: yeah the single bundled PR was the right call here, splitting this one would've just been churn
     assistant: [saves feedback memory: for refactors in this area, user prefers one bundled PR over many small ones. Confirmed after I chose this approach — a validated judgment call, not a correction]
     </examples>
-</type>
-<type>
+</type>"#;
+
+const PROJECT_MEMORY_TYPE: &str = r#"<type>
     <name>project</name>
     <description>Information that you learn about ongoing work, goals, initiatives, bugs, or incidents within the project that is not otherwise derivable from the code or git history. Project memories help you understand the broader context and motivation behind the work the user is doing within this working directory.</description>
     <when_to_save>When you learn who is doing what, why, or by when. These states change relatively quickly so try to keep your understanding of this up to date. Always convert relative dates in user messages to absolute dates when saving (e.g., "Thursday" → "2026-03-05"), so the memory remains interpretable after time passes.</when_to_save>
@@ -90,8 +75,9 @@ There are several discrete types of memory that you can store in your memory sys
     user: the reason we're ripping out the old auth middleware is that legal flagged it for storing session tokens in a way that doesn't meet the new compliance requirements
     assistant: [saves project memory: auth middleware rewrite is driven by legal/compliance requirements around session token storage, not tech-debt cleanup — scope decisions should favor compliance over ergonomics]
     </examples>
-</type>
-<type>
+</type>"#;
+
+const REFERENCE_MEMORY_TYPE: &str = r#"<type>
     <name>reference</name>
     <description>Stores pointers to where information can be found in external systems. These memories allow you to remember where to look to find up-to-date information outside of the project directory.</description>
     <when_to_save>When you learn about resources in external systems and their purpose. For example, that bugs are tracked in a specific project in Linear or that feedback can be found in a specific Slack channel.</when_to_save>
@@ -103,7 +89,46 @@ There are several discrete types of memory that you can store in your memory sys
     user: the Grafana board at grafana.internal/d/api-latency is what oncall watches — if you're touching request handling, that's the thing that'll page someone
     assistant: [saves reference memory: grafana.internal/d/api-latency is the oncall latency dashboard — check it when editing request-path code]
     </examples>
-</type>
+</type>"#;
+
+const GLOBAL_REFERENCE_MEMORY_TYPE: &str = r#"<type>
+    <name>reference</name>
+    <description>Stores durable pointers to external systems or lookup locations that remain useful across workspaces. These memories help you remember where to find current information that lives outside any single project.</description>
+    <when_to_save>When you learn about an external system, dashboard, tracker, document hub, or other stable source of truth that may matter again in future sessions or in more than one workspace.</when_to_save>
+    <how_to_use>Use these memories when the user references outside systems or when you need to find up-to-date information that lives outside the conversation and workspace state currently in view.</how_to_use>
+    <examples>
+    user: company-wide incidents always get tracked in Statuspage first, then linked back into the team-specific repos later
+    assistant: [saves reference memory: Statuspage is the cross-workspace source of truth for company-wide incidents]
+
+    user: if you need billing context, check the finance Notion space — that's shared across all product workspaces
+    assistant: [saves reference memory: finance Notion space is the shared reference for billing context across workspaces]
+    </examples>
+</type>"#;
+
+pub(crate) fn build_workspace_memory_policy_sections(
+    index_file_name: &str,
+    profile: SharedMemoryPolicyProfile,
+) -> String {
+    let explicit_request_guidance = match profile {
+        SharedMemoryPolicyProfile::Full => EXPLICIT_REQUEST_GUIDANCE,
+        SharedMemoryPolicyProfile::Extraction => "",
+    };
+
+    let post_save_sections = match profile {
+        SharedMemoryPolicyProfile::Full => POST_SAVE_SECTIONS,
+        SharedMemoryPolicyProfile::Extraction => "",
+    };
+
+    format!(
+        r#"{explicit_request_guidance}## Types of memory
+
+There are several discrete types of memory that you can store in your memory system:
+
+<types>
+{user_memory_type}
+{feedback_memory_type}
+{project_memory_type}
+{reference_memory_type}
 </types>
 
 ## What NOT to save in memory
@@ -138,37 +163,84 @@ type: {{{{user, feedback, project, reference}}}}
 - Keep the name, description, and type fields in memory files up-to-date with the content
 - Organize memory semantically by topic, not chronologically
 - Update or remove memories that turn out to be wrong or outdated
-- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.{post_save_sections}"#
+- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.{post_save_sections}"#,
+        user_memory_type = USER_MEMORY_TYPE,
+        feedback_memory_type = FEEDBACK_MEMORY_TYPE,
+        project_memory_type = PROJECT_MEMORY_TYPE,
+        reference_memory_type = GLOBAL_REFERENCE_MEMORY_TYPE,
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{build_shared_memory_policy_sections, SharedMemoryPolicyProfile};
+pub(crate) fn build_global_memory_policy_sections(
+    index_file_name: &str,
+    profile: SharedMemoryPolicyProfile,
+) -> String {
+    let explicit_request_guidance = match profile {
+        SharedMemoryPolicyProfile::Full => EXPLICIT_REQUEST_GUIDANCE,
+        SharedMemoryPolicyProfile::Extraction => "",
+    };
 
-    #[test]
-    fn full_profile_keeps_explicit_request_and_followup_sections() {
-        let prompt =
-            build_shared_memory_policy_sections("MEMORY.md", SharedMemoryPolicyProfile::Full);
+    let post_save_sections = match profile {
+        SharedMemoryPolicyProfile::Full => POST_SAVE_SECTIONS,
+        SharedMemoryPolicyProfile::Extraction => "",
+    };
 
-        assert!(prompt.starts_with("If the user explicitly asks you to remember something"));
-        assert!(prompt.contains("## When to access memories"));
-        assert!(prompt.contains("## Before recommending from memory"));
-        assert!(prompt.contains("## Memory and other forms of persistence"));
-    }
+    format!(
+        r#"{explicit_request_guidance}## Types of memory
 
-    #[test]
-    fn extraction_profile_stops_after_how_to_save_memories() {
-        let prompt = build_shared_memory_policy_sections(
-            "MEMORY.md",
-            SharedMemoryPolicyProfile::Extraction,
-        );
+There are several discrete types of memory that you can store in your memory system:
 
-        assert!(!prompt.starts_with("If the user explicitly asks you to remember something"));
-        assert!(!prompt.contains("## When to access memories"));
-        assert!(!prompt.contains("## Before recommending from memory"));
-        assert!(!prompt.contains("## Memory and other forms of persistence"));
-        assert!(prompt.contains("## Types of memory"));
-        assert!(prompt.contains("## How to save memories"));
-    }
+<types>
+{user_memory_type}
+{feedback_memory_type}
+{reference_memory_type}
+</types>
+
+## Special workspace overview files
+
+Files under `workspaces_overview/` are special memories used for workspace routing. 
+Use those files for durable notes about what a workspace is for, reliable aliases, and routing caveats.
+
+## What NOT to save in memory
+
+- Project-specific delivery state, deadlines, bugs, or incidents that only matter inside one user project.
+- Code patterns, conventions, architecture, file paths, or project structure.
+- Git history, recent changes, or who-changed-what.
+- Ephemeral task details: in-progress work, temporary state, current conversation context.
+
+## How to save memories
+
+### For ordinary memories (`user`, `feedback`, `reference`):
+
+**Step 1** — write the memory to its own file using this frontmatter format:
+
+```markdown
+---
+name: {{{{memory name}}}}
+description: {{{{one-line description — used to decide relevance in future conversations, so be specific}}}}
+type: {{{{user, feedback, reference}}}}
+---
+
+{{{{memory content — for feedback types, structure as: rule, then **Why:** and **How to apply:** lines}}}}
+```
+
+**Step 2** — add a pointer to that file in `{index_file_name}`.
+
+- `{index_file_name}` is always loaded into your conversation context — lines after 200 will be truncated, so keep the index concise
+- Keep the name, description, and type fields in memory files up-to-date with the content
+- Organize memory semantically by topic, not chronologically
+- Update or remove memories that turn out to be wrong or outdated
+- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.
+
+### For special workspace overview files (`workspaces_overview/*.md`):
+
+- These files are initially generated by the system.
+- Use them to help with task routing by briefly describing what the workspace is for and its distinguishing characteristics.
+- Keep them concise and high-signal. Do not record too many implementation details, task history, or other project minutiae.
+- These files are auto-loaded into your conversation context, so they do not need to be recorded in `{index_file_name}`.{post_save_sections}
+"#,
+        user_memory_type = USER_MEMORY_TYPE,
+        feedback_memory_type = FEEDBACK_MEMORY_TYPE,
+        reference_memory_type = REFERENCE_MEMORY_TYPE,
+    )
 }

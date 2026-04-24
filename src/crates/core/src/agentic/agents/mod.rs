@@ -24,6 +24,7 @@ mod code_review_agent;
 mod generate_doc_agent;
 mod init_agent;
 
+use crate::service::memory_store::MemoryScope;
 use crate::util::errors::{BitFunError, BitFunResult};
 pub use agentic_mode::AgenticMode;
 use async_trait::async_trait;
@@ -79,6 +80,10 @@ pub trait Agent: Send + Sync + 'static {
 
     fn request_context_policy(&self) -> RequestContextPolicy {
         RequestContextPolicy::default()
+    }
+
+    fn memory_scope(&self) -> MemoryScope {
+        MemoryScope::WorkspaceProject
     }
 
     /// Build the system prompt for this agent

@@ -25,6 +25,7 @@ use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{ModelCapability, ModelCategory};
+use crate::service::memory_store::MemoryScope;
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
@@ -271,6 +272,7 @@ impl ExecutionEngine {
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
+        memory_scope: MemoryScope,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -282,6 +284,7 @@ impl ExecutionEngine {
             Some(context.session_id.clone()),
             Some(model_name.to_string()),
         )
+        .with_memory_scope(memory_scope)
         .with_supports_image_understanding(supports_image_understanding);
 
         let Some(workspace) = context.workspace.as_ref() else {
@@ -1136,6 +1139,7 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
+            current_agent.memory_scope(),
         )
         .await;
         let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {

@@ -1,6 +1,7 @@
 use crate::agentic::core::{Message, MessageRole, MessageSemanticKind};
 use crate::service::memory_store::{
-    build_shared_memory_policy_sections, SharedMemoryPolicyProfile,
+    build_global_memory_policy_sections, build_workspace_memory_policy_sections, MemoryScope,
+    SharedMemoryPolicyProfile,
 };
 
 pub fn count_recent_model_visible_messages(
@@ -45,6 +46,7 @@ pub fn build_extract_prompt(
     recent_message_count: usize,
     memory_dir: &str,
     existing_memories: Option<&str>,
+    memory_scope: MemoryScope,
 ) -> String {
     let manifest = existing_memories
         .filter(|value| !value.trim().is_empty())
@@ -61,7 +63,16 @@ pub fn build_extract_prompt(
 Available tools: Read, Grep, Glob, and Write/Edit/Delete for paths inside `{memory_dir}` only. All other tools will be denied.\n\n\
 You have a limited turn budget. Edit requires a prior Read of the same file, so the efficient strategy is: turn 1 — issue all Read calls in parallel for every file you might update; turn 2 — issue all Write/Edit/Delete calls in parallel. Do not interleave reads and writes across multiple turns.\n\n\
 You MUST only use content from the last ~{recent_message_count} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further — no grepping source files, no reading code to confirm a pattern exists, no git commands.{manifest}\n\n{}",
-        build_shared_memory_policy_sections("MEMORY.md", SharedMemoryPolicyProfile::Extraction)
+        match memory_scope {
+            MemoryScope::WorkspaceProject => build_workspace_memory_policy_sections(
+                "MEMORY.md",
+                SharedMemoryPolicyProfile::Extraction,
+            ),
+            MemoryScope::GlobalAgenticOs => build_global_memory_policy_sections(
+                "MEMORY.md",
+                SharedMemoryPolicyProfile::Extraction,
+            ),
+        }
     )
 }
 
@@ -148,7 +159,12 @@ mod tests {
 
     #[test]
     fn extract_prompt_omits_full_memory_access_guidance_sections() {
-        let prompt = build_extract_prompt(7, "/workspace/memory", None);
+        let prompt = build_extract_prompt(
+            7,
+            "/workspace/memory",
+            None,
+            crate::service::memory_store::MemoryScope::WorkspaceProject,
+        );
 
         assert!(
             !prompt.contains("If the user explicitly asks you to remember something"),
@@ -166,5 +182,19 @@ mod tests {
             !prompt.contains("## Memory and other forms of persistence"),
             "extract prompt should stop before memory persistence guidance"
         );
+    }
+
+    #[test]
+    fn global_extract_prompt_uses_global_memory_policy() {
+        let prompt = build_extract_prompt(
+            7,
+            "/global/memory",
+            None,
+            crate::service::memory_store::MemoryScope::GlobalAgenticOs,
+        );
+
+        assert!(prompt.contains("## Special workspace overview files"));
+        assert!(!prompt.contains("<name>project</name>"));
+        assert!(!prompt.contains("## When to access memories"));
     }
 }

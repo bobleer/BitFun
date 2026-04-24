@@ -7,7 +7,11 @@ use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::instructions::build_instruction_files_context;
-use crate::service::memory_store::{build_memory_files_context, build_memory_prompt};
+use crate::service::memory_store::{
+    build_global_workspace_overviews_context, build_memory_files_context_for_target,
+    build_memory_prompt_for_target, memory_store_dir_path_for_target, MemoryScope,
+    MemoryStoreTarget,
+};
 use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
@@ -41,6 +45,7 @@ pub struct PromptBuilderContext {
     pub workspace_path: String,
     pub session_id: Option<String>,
     pub model_name: Option<String>,
+    pub memory_scope: MemoryScope,
     /// When set, file/shell tools target this remote environment; OS and path instructions follow it.
     pub remote_execution: Option<RemoteExecutionHints>,
     /// Pre-built tree text for `{PROJECT_LAYOUT}` when the workspace is not on the local disk.
@@ -59,10 +64,16 @@ impl PromptBuilderContext {
             workspace_path: workspace_path.into().replace("\\", "/"),
             session_id,
             model_name,
+            memory_scope: MemoryScope::WorkspaceProject,
             remote_execution: None,
             remote_project_layout: None,
             supports_image_understanding: None,
         }
+    }
+
+    pub fn with_memory_scope(mut self, memory_scope: MemoryScope) -> Self {
+        self.memory_scope = memory_scope;
+        self
     }
 
     pub fn with_supports_image_understanding(mut self, supports: bool) -> Self {
@@ -198,29 +209,59 @@ impl PromptBuilder {
         let mut override_sections = Vec::new();
         let mut trailing_sections = Vec::new();
 
-        if self.context.remote_execution.is_none() {
-            let workspace = Path::new(&self.context.workspace_path);
-            if policy.includes(RequestContextSection::WorkspaceInstructions) {
-                match build_instruction_files_context(workspace).await {
-                    Ok(Some(prompt)) => instruction_sections.push(prompt),
-                    Ok(None) => {}
-                    Err(e) => warn!(
-                        "Failed to build workspace instruction context: path={} error={}",
+        let workspace = Path::new(&self.context.workspace_path);
+        if self.context.remote_execution.is_none()
+            && policy.includes(RequestContextSection::WorkspaceInstructions)
+        {
+            match build_instruction_files_context(workspace).await {
+                Ok(Some(prompt)) => instruction_sections.push(prompt),
+                Ok(None) => {}
+                Err(e) => warn!(
+                    "Failed to build workspace instruction context: path={} error={}",
+                    workspace.display(),
+                    e
+                ),
+            }
+        }
+
+        for memory_scope in policy.memory_scopes() {
+            let memory_target = match memory_scope {
+                MemoryScope::WorkspaceProject if self.context.remote_execution.is_some() => {
+                    continue;
+                }
+                MemoryScope::WorkspaceProject => MemoryStoreTarget::WorkspaceProject(workspace),
+                MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
+            };
+
+            match build_memory_files_context_for_target(memory_target).await {
+                Ok(Some(prompt)) => override_sections.push(prompt),
+                Ok(None) => {}
+                Err(e) => {
+                    let scope_label = memory_scope.as_label();
+                    warn!(
+                        "Failed to build {} memory context: workspace_path={} error={}",
+                        scope_label,
                         workspace.display(),
                         e
-                    ),
+                    );
                 }
             }
-            if policy.includes(RequestContextSection::WorkspaceMemoryFiles) {
-                match build_memory_files_context(workspace).await {
-                    Ok(Some(prompt)) => override_sections.push(prompt),
-                    Ok(None) => {}
-                    Err(e) => warn!(
-                        "Failed to build workspace memory context: path={} error={}",
-                        workspace.display(),
-                        e
-                    ),
-                }
+        }
+
+        if policy.includes(RequestContextSection::GlobalWorkspaceOverviews) {
+            let memory_target = MemoryStoreTarget::GlobalAgenticOs;
+            match build_global_workspace_overviews_context(&memory_store_dir_path_for_target(
+                memory_target,
+            ))
+            .await
+            {
+                Ok(Some(prompt)) => override_sections.push(prompt),
+                Ok(None) => {}
+                Err(e) => warn!(
+                    "Failed to build global workspace overviews context: workspace_path={} error={}",
+                    workspace.display(),
+                    e
+                ),
             }
         }
 
@@ -241,6 +282,15 @@ impl PromptBuilder {
             None
         } else {
             Some(sections.join("\n\n"))
+        }
+    }
+
+    fn current_memory_target(&self) -> MemoryStoreTarget<'_> {
+        match self.context.memory_scope {
+            MemoryScope::WorkspaceProject => {
+                MemoryStoreTarget::WorkspaceProject(Path::new(&self.context.workspace_path))
+            }
+            MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
         }
     }
 
@@ -501,17 +551,19 @@ Do not read from, modify, create, move, or delete files outside this workspace u
 
         // Replace {AGENT_MEMORY}
         if result.contains(PLACEHOLDER_AGENT_MEMORY) {
-            let agent_memory = if self.context.remote_execution.is_some() {
-                "# Agent memory\nSession memory under `.bitfun_agentic_os/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
+            let agent_memory = if self.context.remote_execution.is_some()
+                && matches!(self.context.memory_scope, MemoryScope::WorkspaceProject)
+            {
+                "# Auto memory\nPersistent memory under `.bitfun_agentic_os/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
                     .to_string()
             } else {
-                let workspace = Path::new(&self.context.workspace_path);
-                match build_memory_prompt(workspace).await {
+                match build_memory_prompt_for_target(self.current_memory_target()).await {
                     Ok(prompt) => prompt,
                     Err(e) => {
                         warn!(
-                            "Failed to build workspace agent memory prompt: path={} error={}",
-                            workspace.display(),
+                            "Failed to build {} agent memory prompt: workspace_path={} error={}",
+                            self.context.memory_scope.as_label(),
+                            self.context.workspace_path,
                             e
                         );
                         String::new()

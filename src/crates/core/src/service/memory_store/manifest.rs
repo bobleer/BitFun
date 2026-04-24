@@ -1,16 +1,16 @@
 use super::{
-    ensure_memory_store_files, format_manifest_path, list_memory_files_recursive,
-    memory_store_dir_path_impl, parse_memory_frontmatter, MEMORY_MANIFEST_MAX_FILES,
+    ensure_memory_store_for_target, format_manifest_path, list_memory_files_recursive,
+    memory_store_dir_path_for_target, parse_memory_frontmatter, MemoryStoreTarget,
+    MEMORY_MANIFEST_MAX_FILES,
 };
 use crate::util::errors::*;
 use tokio::fs;
 
-pub(crate) async fn build_memory_manifest(
-    workspace_root: &std::path::Path,
+pub(crate) async fn build_memory_manifest_for_target(
+    target: MemoryStoreTarget<'_>,
 ) -> BitFunResult<Option<String>> {
-    ensure_memory_store_files(workspace_root).await?;
-
-    let memory_dir = memory_store_dir_path_impl(workspace_root);
+    ensure_memory_store_for_target(target).await?;
+    let memory_dir = memory_store_dir_path_for_target(target);
     let memory_files = list_memory_files_recursive(&memory_dir).await?;
     if memory_files.is_empty() {
         return Ok(None);

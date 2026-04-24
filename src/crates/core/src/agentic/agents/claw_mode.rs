@@ -68,7 +68,9 @@ impl Agent for ClawMode {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::full_without_layout()
+        RequestContextPolicy::empty()
+            .with_workspace_instructions()
+            .with_memory_scope(crate::service::memory_store::MemoryScope::WorkspaceProject)
     }
 
     fn is_readonly(&self) -> bool {

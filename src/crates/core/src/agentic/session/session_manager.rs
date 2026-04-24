@@ -16,7 +16,9 @@ use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
 };
-use crate::service::memory_store::memory_store_dir_path;
+use crate::service::memory_store::{
+    memory_store_dir_path_for_target, MemoryScope, MemoryStoreTarget,
+};
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, ToolResultData, TurnStatus,
     UserMessageData,
@@ -767,10 +769,11 @@ impl SessionManager {
         })
     }
 
-    pub async fn turn_wrote_workspace_memory(
+    pub async fn turn_wrote_memory_for_scope(
         &self,
         session_id: &str,
         turn_id: &str,
+        memory_scope: MemoryScope,
     ) -> BitFunResult<bool> {
         let session = self
             .get_session(session_id)
@@ -810,7 +813,16 @@ impl SessionManager {
             .load_dialog_turn(&storage_path, session_id, turn_index)
             .await?
             .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
-        let memory_dir = memory_store_dir_path(&workspace_root);
+        let memory_dir = match memory_scope {
+            MemoryScope::WorkspaceProject => {
+                memory_store_dir_path_for_target(MemoryStoreTarget::WorkspaceProject(
+                    workspace_root.as_path(),
+                ))
+            }
+            MemoryScope::GlobalAgenticOs => {
+                memory_store_dir_path_for_target(MemoryStoreTarget::GlobalAgenticOs)
+            }
+        };
 
         for tool in turn
             .model_rounds
@@ -2462,7 +2474,9 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::SessionContextStore;
     use crate::infrastructure::PathManager;
-    use crate::service::memory_store::memory_store_dir_path;
+    use crate::service::memory_store::{
+        memory_store_dir_path_for_target, MemoryScope, MemoryStoreTarget,
+    };
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, ModelRoundData, ToolCallData, ToolItemData, TurnStatus,
         UserMessageData,
@@ -2661,12 +2675,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn turn_wrote_workspace_memory_detects_memory_write_tool_call() {
+    async fn turn_wrote_memory_for_workspace_scope_detects_memory_write_tool_call() {
         let workspace = TestWorkspace::new();
         let (persistence_manager, manager) = build_test_session_manager();
         let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
 
-        let memory_file = memory_store_dir_path(workspace.path()).join("user_pref.md");
+        let memory_file =
+            memory_store_dir_path_for_target(MemoryStoreTarget::WorkspaceProject(workspace.path()))
+                .join("user_pref.md");
         let mut turn = persistence_manager
             .load_dialog_turn(workspace.path(), &session_id, 0)
             .await
@@ -2698,7 +2714,11 @@ mod tests {
             .expect("turn should save");
 
         let detected = manager
-            .turn_wrote_workspace_memory(&session_id, &turn_id)
+            .turn_wrote_memory_for_scope(
+                &session_id,
+                &turn_id,
+                MemoryScope::WorkspaceProject,
+            )
             .await
             .expect("memory write detection should succeed");
 
@@ -2706,7 +2726,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn turn_wrote_workspace_memory_ignores_non_memory_write_tool_call() {
+    async fn turn_wrote_memory_for_workspace_scope_ignores_non_memory_write_tool_call() {
         let workspace = TestWorkspace::new();
         let (persistence_manager, manager) = build_test_session_manager();
         let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
@@ -2743,11 +2763,61 @@ mod tests {
             .expect("turn should save");
 
         let detected = manager
-            .turn_wrote_workspace_memory(&session_id, &turn_id)
+            .turn_wrote_memory_for_scope(
+                &session_id,
+                &turn_id,
+                MemoryScope::WorkspaceProject,
+            )
             .await
             .expect("memory write detection should succeed");
 
         assert!(!detected);
+    }
+
+    #[tokio::test]
+    async fn turn_wrote_memory_for_global_scope_detects_global_memory_write_tool_call() {
+        let workspace = TestWorkspace::new();
+        let (persistence_manager, manager) = build_test_session_manager();
+        let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
+
+        let memory_file =
+            memory_store_dir_path_for_target(MemoryStoreTarget::GlobalAgenticOs).join("user.md");
+        let mut turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session_id, 0)
+            .await
+            .expect("turn load should succeed")
+            .expect("turn should exist");
+        turn.status = TurnStatus::Completed;
+        turn.model_rounds = vec![ModelRoundData {
+            id: format!("round-{}", Uuid::new_v4()),
+            turn_id: turn.turn_id.clone(),
+            round_index: 0,
+            timestamp: 1,
+            text_items: Vec::new(),
+            tool_items: vec![build_tool_item(
+                "Write",
+                json!({
+                    "file_path": memory_file.to_string_lossy().to_string(),
+                    "content": "memory"
+                }),
+                None,
+            )],
+            thinking_items: Vec::new(),
+            start_time: 1,
+            end_time: Some(2),
+            status: "completed".to_string(),
+        }];
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let detected = manager
+            .turn_wrote_memory_for_scope(&session_id, &turn_id, MemoryScope::GlobalAgenticOs)
+            .await
+            .expect("global memory write detection should succeed");
+
+        assert!(detected);
     }
 
     #[tokio::test]

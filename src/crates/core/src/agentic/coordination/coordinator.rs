@@ -27,7 +27,8 @@ use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
 use crate::service::memory_store::{
-    build_memory_manifest, ensure_memory_store_files, memory_store_dir_path,
+    build_memory_manifest_for_target, ensure_memory_store_for_target,
+    memory_store_dir_path_for_target, MemoryScope, MemoryStoreTarget,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
@@ -51,20 +52,27 @@ enum AutoMemoryPostTurnAction {
 
 fn decide_auto_memory_post_turn_action(
     session_kind: SessionKind,
-    turn_wrote_workspace_memory: Option<bool>,
+    turn_wrote_memory: Option<bool>,
 ) -> AutoMemoryPostTurnAction {
     if matches!(session_kind, SessionKind::Subagent) {
         return AutoMemoryPostTurnAction::Skip;
     }
 
-    match turn_wrote_workspace_memory {
+    match turn_wrote_memory {
         Some(true) => AutoMemoryPostTurnAction::Skip,
         Some(false) | None => AutoMemoryPostTurnAction::Schedule,
     }
 }
 
-fn build_auto_memory_workspace_key(workspace_path: &Path) -> String {
-    memory_store_dir_path(workspace_path)
+fn resolve_auto_memory_scope(agent_type: &str, workspace_path: &Path) -> MemoryScope {
+    get_agent_registry()
+        .get_agent(agent_type, Some(workspace_path))
+        .map(|agent| agent.memory_scope())
+        .unwrap_or(MemoryScope::WorkspaceProject)
+}
+
+fn build_auto_memory_store_key(target: MemoryStoreTarget<'_>) -> String {
+    memory_store_dir_path_for_target(target)
         .to_string_lossy()
         .replace('\\', "/")
 }
@@ -1610,12 +1618,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let user_message_metadata_clone = user_message_metadata;
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
         let session_kind = session.kind;
-        let auto_memory_workspace_key = if session.config.remote_connection_id.is_none() {
+        let auto_memory_scope = if session.config.remote_connection_id.is_none() {
             session
                 .config
                 .workspace_path
                 .as_deref()
-                .map(|path| build_auto_memory_workspace_key(Path::new(path)))
+                .map(|path| resolve_auto_memory_scope(&session.agent_type, Path::new(path)))
+        } else {
+            None
+        };
+        let auto_memory_store_key = if session.config.remote_connection_id.is_none() {
+            session.config.workspace_path.as_deref().map(|path| {
+                let workspace_path = Path::new(path);
+                let target = match auto_memory_scope.unwrap_or(MemoryScope::WorkspaceProject) {
+                    MemoryScope::WorkspaceProject => {
+                        MemoryStoreTarget::WorkspaceProject(workspace_path)
+                    }
+                    MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
+                };
+                build_auto_memory_store_key(target)
+            })
         } else {
             None
         };
@@ -1668,36 +1690,43 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .update_session_state(&session_id_clone, SessionState::Idle)
                         .await;
 
-                    let turn_wrote_workspace_memory = if matches!(
-                        session_kind,
-                        SessionKind::Subagent
-                    ) {
+                    let turn_wrote_memory = if matches!(session_kind, SessionKind::Subagent) {
                         None
-                    } else {
+                    } else if let Some(memory_scope) = auto_memory_scope {
                         match session_manager
-                            .turn_wrote_workspace_memory(&session_id_clone, &turn_id_clone)
+                            .turn_wrote_memory_for_scope(
+                                &session_id_clone,
+                                &turn_id_clone,
+                                memory_scope,
+                            )
                             .await
                         {
                             Ok(wrote_memory) => Some(wrote_memory),
                             Err(error) => {
                                 warn!(
-                                    "Failed to inspect turn for direct workspace memory writes; scheduling auto memory anyway: session_id={}, turn_id={}, error={}",
-                                    session_id_clone, turn_id_clone, error
+                                    "Failed to inspect turn for direct memory writes; scheduling auto memory anyway: session_id={}, turn_id={}, scope={}, error={}",
+                                    session_id_clone, turn_id_clone, memory_scope.as_label(), error
                                 );
                                 None
                             }
                         }
+                    } else {
+                        None
                     };
 
                     match decide_auto_memory_post_turn_action(
                         session_kind,
-                        turn_wrote_workspace_memory,
+                        turn_wrote_memory,
                     ) {
                         AutoMemoryPostTurnAction::Skip => {
-                            if matches!(turn_wrote_workspace_memory, Some(true)) {
+                            if matches!(turn_wrote_memory, Some(true)) {
                                 debug!(
-                                    "Skipping auto memory extractor because the completed turn already updated memory files: session_id={}, turn_id={}",
-                                    session_id_clone, turn_id_clone
+                                    "Skipping auto memory extractor because the completed turn already updated memory files: session_id={}, turn_id={}, scope={}",
+                                    session_id_clone,
+                                    turn_id_clone,
+                                    auto_memory_scope
+                                        .unwrap_or(MemoryScope::WorkspaceProject)
+                                        .as_label()
                                 );
                                 match session_manager
                                     .mark_auto_memory_consumed_through_turn(
@@ -1718,7 +1747,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             }
                         }
                         AutoMemoryPostTurnAction::Schedule => {
-                            if let Some(workspace_key) = auto_memory_workspace_key.as_ref() {
+                            if let Some(memory_store_key) = auto_memory_store_key.as_ref() {
                                 let auto_memory_config = auto_memory_runtime_config().await;
                                 let extract_every_eligible_turns =
                                     auto_memory_config.extract_every_eligible_turns.max(1) as usize;
@@ -1746,7 +1775,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                                     .schedule_after_turn(
                                                         coordinator.clone(),
                                                         session_id_clone.clone(),
-                                                        workspace_key.clone(),
+                                                        memory_store_key.clone(),
                                                     );
                                             }
                                         }
@@ -1781,7 +1810,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                                     .schedule_after_turn(
                                                         coordinator.clone(),
                                                         session_id_clone.clone(),
-                                                        workspace_key.clone(),
+                                                        memory_store_key.clone(),
                                                     );
                                             }
                                         }
@@ -2023,10 +2052,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_id
                 ))
             })?);
-        ensure_memory_store_files(&workspace_root).await?;
-        let memory_dir = memory_store_dir_path(&workspace_root);
+        let memory_scope = resolve_auto_memory_scope(&session.agent_type, &workspace_root);
+        let memory_target = match memory_scope {
+            MemoryScope::WorkspaceProject => {
+                MemoryStoreTarget::WorkspaceProject(workspace_root.as_path())
+            }
+            MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
+        };
+        ensure_memory_store_for_target(memory_target).await?;
+        let memory_dir = memory_store_dir_path_for_target(memory_target);
         let memory_dir_display = memory_dir.to_string_lossy().replace('\\', "/");
-        let existing_memories = build_memory_manifest(&workspace_root).await?;
+        let existing_memories = build_memory_manifest_for_target(memory_target).await?;
         let snapshot = self.capture_fork_context_snapshot(session_id).await?;
         let recent_message_count = count_recent_model_visible_messages(
             &snapshot.messages,
@@ -2041,17 +2077,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             recent_message_count,
             &memory_dir_display,
             existing_memories.as_deref(),
+            memory_scope,
         );
 
         debug!(
-            "Launching auto memory fork: session_id={}, from_turn={}, through_turn={}, pending_turns={}, recent_message_count={}, inherited_messages={}, has_existing_memory_manifest={}",
+            "Launching auto memory fork: session_id={}, from_turn={}, through_turn={}, pending_turns={}, recent_message_count={}, inherited_messages={}, has_existing_memory_manifest={}, scope={}",
             session_id,
             cursor.from_turn,
             cursor.through_turn,
             pending_turns.len(),
             recent_message_count,
             snapshot.inherited_message_count(),
-            existing_memories.is_some()
+            existing_memories.is_some(),
+            memory_scope.as_label()
         );
 
         let result = self

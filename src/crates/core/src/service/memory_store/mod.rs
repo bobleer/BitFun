@@ -1,38 +1,60 @@
+mod global_overview;
 mod manifest;
 mod paths;
 mod policy;
 mod prompt_context;
 
-use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::*;
-use log::debug;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-pub(crate) use manifest::build_memory_manifest;
-pub(crate) use paths::{ensure_memory_store_files, memory_store_dir_path};
-pub(crate) use policy::{build_shared_memory_policy_sections, SharedMemoryPolicyProfile};
-pub(crate) use prompt_context::{build_memory_files_context, build_memory_prompt};
+pub(crate) use manifest::build_memory_manifest_for_target;
+pub(crate) use paths::{ensure_memory_store_for_target, memory_store_dir_path_for_target};
+pub(crate) use policy::{
+    build_global_memory_policy_sections, build_workspace_memory_policy_sections,
+    SharedMemoryPolicyProfile,
+};
+pub(crate) use prompt_context::{
+    build_memory_files_context_for_target, build_memory_prompt_for_target,
+};
+pub(crate) use global_overview::build_global_workspace_overviews_context;
 
 pub(crate) const MEMORY_INDEX_FILE: &str = "MEMORY.md";
 const MEMORY_DIR_NAME: &str = "memory";
 const LEGACY_MEMORY_INDEX_FILE: &str = "memory.md";
-const MEMORY_INDEX_TEMPLATE: &str = "# Memory Index\n";
+const MEMORY_INDEX_TEMPLATE: &str = "";
 const MEMORY_INDEX_MAX_LINES: usize = 200;
-const TOPIC_MEMORY_MAX_FILES: usize = 30;
 const MEMORY_MANIFEST_MAX_FILES: usize = 200;
 
-fn memory_store_dir_path_impl(workspace_root: &Path) -> PathBuf {
-    let path_manager = get_path_manager_arc();
-    let path = path_manager.project_memory_dir(workspace_root);
-    debug!(
-        "Resolved memory store directory: workspace={} memory_dir={} storage_subdir={}",
-        workspace_root.display(),
-        path.display(),
-        MEMORY_DIR_NAME
-    );
-    path
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryScope {
+    WorkspaceProject,
+    GlobalAgenticOs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MemoryStoreTarget<'a> {
+    WorkspaceProject(&'a Path),
+    GlobalAgenticOs,
+}
+
+impl MemoryScope {
+    pub(crate) fn as_label(self) -> &'static str {
+        match self {
+            Self::WorkspaceProject => "workspace",
+            Self::GlobalAgenticOs => "global",
+        }
+    }
+}
+
+impl<'a> MemoryStoreTarget<'a> {
+    pub(crate) fn scope(self) -> MemoryScope {
+        match self {
+            Self::WorkspaceProject(_) => MemoryScope::WorkspaceProject,
+            Self::GlobalAgenticOs => MemoryScope::GlobalAgenticOs,
+        }
+    }
 }
 
 pub(super) fn format_path_for_prompt(path: &Path) -> String {
@@ -71,45 +93,6 @@ pub(super) async fn migrate_legacy_memory_index(memory_dir: &Path) -> BitFunResu
         })?;
 
     Ok(())
-}
-
-pub(super) async fn list_memory_files(memory_dir: &Path) -> BitFunResult<Vec<String>> {
-    let mut memory_files = Vec::new();
-    let mut entries = fs::read_dir(memory_dir).await.map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to read memory directory {}: {}",
-            memory_dir.display(),
-            e
-        ))
-    })?;
-
-    while let Some(entry) = entries.next_entry().await.map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to iterate memory directory {}: {}",
-            memory_dir.display(),
-            e
-        ))
-    })? {
-        let file_type = entry.file_type().await.map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to inspect memory entry {}: {}",
-                entry.path().display(),
-                e
-            ))
-        })?;
-        if !file_type.is_file() {
-            continue;
-        }
-
-        let file_name = entry.file_name().to_string_lossy().into_owned();
-        if file_name.ends_with(".md") && !file_name.eq_ignore_ascii_case(MEMORY_INDEX_FILE) {
-            memory_files.push(file_name);
-        }
-    }
-
-    memory_files.sort();
-
-    Ok(memory_files)
 }
 
 pub(super) async fn list_memory_files_recursive(memory_dir: &Path) -> BitFunResult<Vec<PathBuf>> {

@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 pub fn build_auto_memory_runtime_restrictions(memory_dir: &str) -> ToolRuntimeRestrictions {
     ToolRuntimeRestrictions {
-        allowed_tool_names: ["Read", "Glob", "Grep", "Write", "Edit", "Delete"]
+        allowed_tool_names: ["Read", "Glob", "Grep", "Write", "Edit", "Delete", "Bash"]
             .into_iter()
             .map(str::to_string)
             .collect::<BTreeSet<_>>(),
