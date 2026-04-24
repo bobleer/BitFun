@@ -574,6 +574,7 @@ pub async fn run() {
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_get_status,
             api::browser_control_api::browser_control_launch,
+            api::browser_control_api::browser_control_restart_with_cdp,
             api::browser_control_api::browser_control_create_launcher,
             api::self_control_api::submit_self_control_response,
             // SSH Remote API
@@ -601,6 +602,7 @@ pub async fn run() {
             api::ssh_api::remote_execute,
             api::ssh_api::remote_open_workspace,
             api::ssh_api::remote_close_workspace,
+            api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,
