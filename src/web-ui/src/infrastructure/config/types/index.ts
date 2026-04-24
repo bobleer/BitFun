@@ -179,6 +179,11 @@ export interface AIConfig {
 }
 
 export interface AutoMemoryConfig {
+  global: AutoMemoryScopeConfig;
+  workspace: AutoMemoryScopeConfig;
+}
+
+export interface AutoMemoryScopeConfig {
   enabled: boolean;
   extract_every_eligible_turns: number;
 }

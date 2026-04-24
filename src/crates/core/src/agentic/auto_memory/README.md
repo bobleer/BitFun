@@ -186,19 +186,25 @@ the turn is simply counted toward the next extraction.
 
 Global config lives under:
 
-- `ai.auto_memory.enabled`
-- `ai.auto_memory.extract_every_eligible_turns`
+- `ai.auto_memory.global.enabled`
+- `ai.auto_memory.global.extract_every_eligible_turns`
+- `ai.auto_memory.workspace.enabled`
+- `ai.auto_memory.workspace.extract_every_eligible_turns`
 
 Behavior:
 
+- scope selection follows the session's memory target
+  `global` applies to `agentic_os` memory (`MemoryScope::GlobalAgenticOs`)
+  and `workspace` applies to normal project memory
+  (`MemoryScope::WorkspaceProject`)
 - `enabled = false`
-  Disables scheduling and execution, but eligible turns are still counted as
-  pending backlog.
+  Disables scheduling and execution for that scope, but eligible turns are
+  still counted as pending backlog.
 - `extract_every_eligible_turns = 1`
-  Run after every eligible turn.
+  Run after every eligible turn for that scope.
 - `extract_every_eligible_turns = N`
-  Run once there are at least N unextracted eligible turns, checked on each
-  newly completed eligible turn.
+  Run once there are at least N unextracted eligible turns for that scope,
+  checked on each newly completed eligible turn.
 
 This is modeled after Claude's "every N eligible turns" extraction throttle,
 but implemented durably on the session state instead of a transient closure

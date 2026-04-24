@@ -2,12 +2,22 @@
   "title": "记忆",
   "subtitle": "配置后台自动记忆提炼行为",
   "autoMemory": {
-    "sectionTitle": "自动记忆",
-    "sectionDescription": "在对话完成后，后台提炼流程会更新工作区记忆文件。",
-    "enabled": "启用自动记忆",
-    "enabledDesc": "",
-    "extractEveryEligibleTurns": "记忆更新频率",
-    "extractEveryEligibleTurnsDesc": "每完成 N 轮对话，更新一次记忆。"
+    "global": {
+      "sectionTitle": "全局记忆",
+      "sectionDescription": "控制 agentic_os 记忆的后台自动提炼。",
+      "enabled": "启用全局自动记忆",
+      "enabledDesc": "",
+      "extractEveryEligibleTurns": "全局记忆更新频率",
+      "extractEveryEligibleTurnsDesc": "每完成 N 轮符合条件的对话，更新一次 agentic_os 记忆。"
+    },
+    "workspace": {
+      "sectionTitle": "工作区记忆",
+      "sectionDescription": "控制普通 agent 的工作区记忆后台自动提炼。",
+      "enabled": "启用工作区自动记忆",
+      "enabledDesc": "",
+      "extractEveryEligibleTurns": "工作区记忆更新频率",
+      "extractEveryEligibleTurnsDesc": "每完成 N 轮符合条件的对话，更新一次工作区记忆。"
+    }
   },
   "loading": {
     "text": "加载配置中..."
