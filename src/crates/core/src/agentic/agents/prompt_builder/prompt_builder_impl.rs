@@ -1,7 +1,5 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
 use super::request_context::{RequestContextPolicy, RequestContextSection};
-use crate::agentic::persistence::PersistenceManager;
-use crate::infrastructure::PathManager;
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
@@ -16,7 +14,6 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
-use std::sync::Arc;
 
 /// Placeholder constants
 const PLACEHOLDER_PERSONA: &str = "{PERSONA}";
@@ -25,12 +22,6 @@ const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
-const PLACEHOLDER_RECENT_WORKSPACES: &str = "{RECENT_WORKSPACES}";
-const PLACEHOLDER_ACTIVE_SESSION_CONTEXT: &str = "{ACTIVE_SESSION_CONTEXT}";
-
-/// Maximum character length for active session context injected into system prompt.
-/// Older turns are dropped first when the total exceeds this limit.
-const MAX_ACTIVE_SESSION_CONTEXT_CHARS: usize = 8_000;
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -43,7 +34,6 @@ pub struct RemoteExecutionHints {
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
     pub workspace_path: String,
-    pub session_id: Option<String>,
     pub model_name: Option<String>,
     pub memory_scope: MemoryScope,
     /// When set, file/shell tools target this remote environment; OS and path instructions follow it.
@@ -57,12 +47,10 @@ pub struct PromptBuilderContext {
 impl PromptBuilderContext {
     pub fn new(
         workspace_path: impl Into<String>,
-        session_id: Option<String>,
         model_name: Option<String>,
     ) -> Self {
         Self {
             workspace_path: workspace_path.into().replace("\\", "/"),
-            session_id,
             model_name,
             memory_scope: MemoryScope::WorkspaceProject,
             remote_execution: None,
@@ -206,6 +194,7 @@ impl PromptBuilder {
     ) -> Option<String> {
         let mut sections = Vec::new();
         let mut instruction_sections = Vec::new();
+        let mut routing_sections = Vec::new();
         let mut override_sections = Vec::new();
         let mut trailing_sections = Vec::new();
 
@@ -221,6 +210,13 @@ impl PromptBuilder {
                     workspace.display(),
                     e
                 ),
+            }
+        }
+
+        if policy.includes(RequestContextSection::RecentWorkspaces) {
+            let recent_workspaces = self.build_recent_workspaces_context().await;
+            if !recent_workspaces.is_empty() {
+                routing_sections.push(recent_workspaces);
             }
         }
 
@@ -255,7 +251,7 @@ impl PromptBuilder {
             ))
             .await
             {
-                Ok(Some(prompt)) => override_sections.push(prompt),
+                Ok(Some(prompt)) => routing_sections.push(prompt),
                 Ok(None) => {}
                 Err(e) => warn!(
                     "Failed to build global workspace overviews context: workspace_path={} error={}",
@@ -270,6 +266,7 @@ impl PromptBuilder {
         }
 
         sections.extend(instruction_sections);
+        sections.extend(routing_sections);
 
         if policy.has_override_sections() && !override_sections.is_empty() {
             sections.push("Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.".to_string());
@@ -345,137 +342,29 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
         Ok(format!("# Language Preference\nYou MUST respond in {} regardless of the user's input language. This is the system language setting and should be followed unless the user explicitly specifies a different language. This is crucial for smooth communication and user experience\n", language))
     }
 
-    /// Get recently accessed workspaces formatted as a prompt section
-    pub async fn get_recent_workspaces_info(&self) -> String {
+    /// Build recently accessed workspaces as a request-context section.
+    pub async fn build_recent_workspaces_context(&self) -> String {
         let ws_service = match get_global_workspace_service() {
             Some(s) => s,
             None => return String::new(),
         };
 
-        let mut lines: Vec<String> = Vec::new();
-
-        // Assistant/global workspaces
-        let assistant_workspaces = ws_service.get_assistant_workspaces().await;
-        for ws in &assistant_workspaces {
-            lines.push(format!(
-                "  - [global] {} — {}",
-                ws.name,
-                ws.root_path.display()
-            ));
-        }
+        let mut rows: Vec<String> = Vec::new();
 
         // Recent project workspaces
         let recent = ws_service.get_recent_workspaces().await;
         for ws in &recent {
             let last = ws.last_accessed.format("%Y-%m-%d %H:%M").to_string();
-            lines.push(format!(
-                "  - [project] {} — {} (last accessed: {})",
-                ws.name,
-                ws.root_path.display(),
-                last
-            ));
+            rows.push(format!("| {} | {} |", ws.root_path.display(), last));
         }
 
-        if lines.is_empty() {
+        if rows.is_empty() {
             return String::new();
         }
 
         format!(
-            "# Available Workspaces\n<available_workspaces>\nThe following workspaces are available. Use these paths when creating agent sessions.\n\n{}\n</available_workspaces>\n\n",
-            lines.join("\n")
-        )
-    }
-
-    /// Build a concise text snapshot of the current active session's dialog turns.
-    ///
-    /// Only user messages and assistant text are included (tool calls are omitted).
-    /// If the total character count exceeds [`MAX_ACTIVE_SESSION_CONTEXT_CHARS`], the oldest
-    /// turns are dropped and a truncation notice is prepended so the AI is aware.
-    ///
-    /// Returns an empty string when `session_id` is not set in the context or when
-    /// loading turns fails.
-    pub async fn get_active_session_context(&self) -> String {
-        let session_id = match &self.context.session_id {
-            Some(id) => id.clone(),
-            None => return String::new(),
-        };
-
-        let manager = match (|| -> BitFunResult<PersistenceManager> {
-            Ok(PersistenceManager::new(Arc::new(PathManager::new()?))?)
-        })() {
-            Ok(m) => m,
-            Err(e) => {
-                warn!(
-                    "Failed to create PersistenceManager for active session context: {}",
-                    e
-                );
-                return String::new();
-            }
-        };
-
-        let workspace_path = Path::new(&self.context.workspace_path);
-        let turns = match manager
-            .load_session_turns(workspace_path, &session_id)
-            .await
-        {
-            Ok(t) => t,
-            Err(e) => {
-                warn!(
-                    "Failed to load session turns for active session context: session_id={} error={}",
-                    session_id, e
-                );
-                return String::new();
-            }
-        };
-
-        if turns.is_empty() {
-            return String::new();
-        }
-
-        // Format each turn as a compact user / assistant block (no tool details)
-        let mut turn_texts: Vec<String> = turns
-            .iter()
-            .map(|turn| {
-                let user_content = turn.user_message.content.trim().to_string();
-
-                let assistant_text: String = turn
-                    .model_rounds
-                    .iter()
-                    .flat_map(|round| round.text_items.iter())
-                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                    .map(|item| item.content.trim())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-
-                let mut text = format!("[Turn {}]\nUser: {}", turn.turn_index, user_content);
-                if !assistant_text.is_empty() {
-                    text.push_str(&format!("\nAssistant: {}", assistant_text));
-                }
-                text
-            })
-            .collect();
-
-        // Drop oldest turns until total fits within the character budget
-        let mut total_chars: usize = turn_texts.iter().map(|t| t.len() + 2).sum();
-        let mut truncated = false;
-        while total_chars > MAX_ACTIVE_SESSION_CONTEXT_CHARS && turn_texts.len() > 1 {
-            let removed_len = turn_texts[0].len() + 2;
-            turn_texts.remove(0);
-            total_chars = total_chars.saturating_sub(removed_len);
-            truncated = true;
-        }
-
-        let truncation_notice = if truncated {
-            "[Note: Earlier turns have been truncated. Only the most recent portion of this session is shown.]\n\n"
-        } else {
-            ""
-        };
-
-        format!(
-            "# Current Session Context\n<session_context>\n{}{}\n</session_context>\n\n",
-            truncation_notice,
-            turn_texts.join("\n\n")
+            "# Accessed Workspaces\nThe entries below are recently accessed workspaces for reference. They are common routing candidates, not an exhaustive or exclusive list of workspaces you may use when creating agent sessions.\n\n| Path | Last Accessed |\n| --- | --- |\n{}\n\n",
+            rows.join("\n")
         )
     }
 
@@ -500,10 +389,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{AGENT_MEMORY}` - Agent memory instructions + auto-loaded memory index
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
-    /// - `{RECENT_WORKSPACES}` - Recently accessed global and project workspaces with paths
-    /// - `{ACTIVE_SESSION_CONTEXT}` - Current session's recent dialog history (user + assistant
-    ///   text only, no tool details). Oldest turns are dropped when the total exceeds
-    ///   [`MAX_ACTIVE_SESSION_CONTEXT_CHARS`]; a truncation notice is prepended in that case.
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
     pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
@@ -577,18 +462,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_VISUAL_MODE) {
             let visual_mode = self.get_visual_mode_instruction().await;
             result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
-        }
-
-        // Replace {RECENT_WORKSPACES}
-        if result.contains(PLACEHOLDER_RECENT_WORKSPACES) {
-            let recent_workspaces = self.get_recent_workspaces_info().await;
-            result = result.replace(PLACEHOLDER_RECENT_WORKSPACES, &recent_workspaces);
-        }
-
-        // Replace {ACTIVE_SESSION_CONTEXT}
-        if result.contains(PLACEHOLDER_ACTIVE_SESSION_CONTEXT) {
-            let session_context = self.get_active_session_context().await;
-            result = result.replace(PLACEHOLDER_ACTIVE_SESSION_CONTEXT, &session_context);
         }
 
         if self.context.supports_image_understanding == Some(false) {

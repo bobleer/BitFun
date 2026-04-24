@@ -281,7 +281,6 @@ impl ExecutionEngine {
 
         let base = PromptBuilderContext::new(
             workspace_path.clone(),
-            Some(context.session_id.clone()),
             Some(model_name.to_string()),
         )
         .with_memory_scope(memory_scope)
