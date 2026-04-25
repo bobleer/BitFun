@@ -1,6 +1,6 @@
 //! Dispatcher Mode — BitFun Agentic OS scheduling center
-
-use super::Agent;
+use super::{Agent, RequestContextPolicy};
+use crate::service::memory_store::MemoryScope;
 use async_trait::async_trait;
 
 pub struct DispatcherMode {
@@ -35,6 +35,10 @@ impl DispatcherMode {
                 "TodoWrite".to_string(),
                 // Clarification
                 "AskUserQuestion".to_string(),
+                // Forked auto-memory agent use these tools to update memory 
+                "Write".to_string(),
+                "Edit".to_string(),
+                "Delete".to_string(),
             ],
         }
     }
@@ -64,6 +68,18 @@ impl Agent for DispatcherMode {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_instructions()
+            .with_recent_workspaces()
+            .with_memory_scope(MemoryScope::GlobalAgenticOs)
+            .with_global_workspace_overviews()
+    }
+
+    fn memory_scope(&self) -> MemoryScope {
+        MemoryScope::GlobalAgenticOs
     }
 
     fn is_readonly(&self) -> bool {

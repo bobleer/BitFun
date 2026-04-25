@@ -47,6 +47,20 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
+            if ai_config.auto_memory.global.extract_every_eligible_turns == 0 {
+                return Err(BitFunError::validation(
+                    "AI auto_memory.global.extract_every_eligible_turns must be greater than 0"
+                        .to_string(),
+                ));
+            }
+
+            if ai_config.auto_memory.workspace.extract_every_eligible_turns == 0 {
+                return Err(BitFunError::validation(
+                    "AI auto_memory.workspace.extract_every_eligible_turns must be greater than 0"
+                        .to_string(),
+                ));
+            }
+
             for (index, model) in ai_config.models.iter().enumerate() {
                 if model.name.trim().is_empty() {
                     return Err(BitFunError::validation(format!(

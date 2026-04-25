@@ -20,6 +20,7 @@ import './SettingsScene.scss';
 import AIModelConfig from '../../../infrastructure/config/components/AIModelConfig';
 import PersonalizationConfig from '../../../infrastructure/config/components/PersonalizationConfig';
 import PermissionsConfig from '../../../infrastructure/config/components/PermissionsConfig';
+import MemoryConfig from '../../../infrastructure/config/components/MemoryConfig';
 import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
 import AppearanceConfig from '../../../infrastructure/config/components/AppearanceConfig';
 import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig';
@@ -44,6 +45,7 @@ const SettingsScene: React.FC = () => {
       case 'models':           Content = AIModelConfig;    break;
       case 'personalization':  Content = PersonalizationConfig; break;
       case 'permissions':      Content = PermissionsConfig; break;
+      case 'memory':           Content = MemoryConfig; break;
       case 'editor':           Content = EditorConfig;     break;
     }
   }

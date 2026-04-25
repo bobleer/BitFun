@@ -32,9 +32,7 @@ export const useDialogCompletionNotify = () => {
     window.addEventListener('blur', handleBlur);
 
     const unlisten = agentAPI.onDialogTurnCompleted(async (event) => {
-      const subagentParentInfo =
-        event?.subagentParentInfo ?? event?.subagent_parent_info;
-      if (subagentParentInfo) {
+      if (event.subagentParentInfo || event.hiddenSession) {
         return;
       }
 

@@ -59,7 +59,7 @@ Examples:
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_only()
+        RequestContextPolicy::empty().with_workspace_instructions()
     }
 
     fn is_readonly(&self) -> bool {

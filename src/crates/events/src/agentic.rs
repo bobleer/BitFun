@@ -20,6 +20,21 @@ pub struct SubagentParentInfo {
     pub dialog_turn_id: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBackgroundActivityKind {
+    AutoMemory,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBackgroundActivityStatus {
+    Running,
+    Completed,
+    Failed,
+    Dismissed,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgenticEvent {
@@ -78,6 +93,8 @@ pub enum AgenticEvent {
         total_rounds: usize,
         total_tools: usize,
         duration_ms: u64,
+        #[serde(default)]
+        hidden_session: bool,
         subagent_parent_info: Option<SubagentParentInfo>,
     },
 
@@ -199,6 +216,17 @@ pub enum AgenticEvent {
         /// Why the migration happened, e.g. `"model_disabled"` or
         /// `"model_deleted"`.
         reason: String,
+    },
+
+    SessionBackgroundActivityUpdated {
+        session_id: String,
+        activity_id: String,
+        kind: SessionBackgroundActivityKind,
+        status: SessionBackgroundActivityStatus,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        target_turn_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
     },
 }
 
@@ -343,7 +371,8 @@ impl AgenticEvent {
             | Self::ThinkingChunk { session_id, .. }
             | Self::ModelRoundCompleted { session_id, .. }
             | Self::ToolEvent { session_id, .. }
-            | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
+            | Self::SessionModelAutoMigrated { session_id, .. }
+            | Self::SessionBackgroundActivityUpdated { session_id, .. } => Some(session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
     }
@@ -358,6 +387,7 @@ impl AgenticEvent {
             Self::SessionStateChanged { .. }
             | Self::SessionTitleGenerated { .. }
             | Self::SessionModelAutoMigrated { .. }
+            | Self::SessionBackgroundActivityUpdated { .. }
             | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
 
             Self::ImageAnalysisStarted { .. }

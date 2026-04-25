@@ -11,6 +11,7 @@ pub mod implementations;
 pub mod input_validator;
 pub mod pipeline;
 pub mod registry;
+pub mod restrictions;
 pub mod user_input_manager;
 pub mod workspace_paths;
 
@@ -22,3 +23,4 @@ pub use registry::{
     create_tool_registry, get_all_registered_tool_names, get_all_registered_tools, get_all_tools,
     get_readonly_tools,
 };
+pub use restrictions::{ToolPathOperation, ToolPathPolicy, ToolRuntimeRestrictions};

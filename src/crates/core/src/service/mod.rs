@@ -2,7 +2,6 @@
 //!
 //! Contains core business logic: Workspace, Config, FileSystem, Agentic, MCP.
 
-pub(crate) mod agent_memory; // Agent memory prompt helpers
 pub mod announcement; // Announcement / feature-demo / tips system
 pub(crate) mod bootstrap; // Workspace persona bootstrap helpers
 pub mod config; // Config management
@@ -10,7 +9,9 @@ pub mod cron; // Scheduled jobs
 pub mod file_watch;
 pub mod filesystem; // FileSystem management
 pub mod i18n; // I18n service
+pub(crate) mod instructions; // Instruction memory (AGENTS.md / CLAUDE.md style files)
 pub mod mcp; // MCP (Model Context Protocol) system
+pub(crate) mod memory_store; // Agent-managed persistent memory store and prompt helpers
 pub mod project_detection; // Workspace project / language detection
 pub mod remote_connect; // Remote Connect (phone → desktop)
 pub mod remote_ssh; // Remote SSH (desktop → server)

@@ -42,7 +42,8 @@ export type I18nNamespace =
   | 'scenes/subagents'
   | 'scenes/profile'
   | 'scenes/skills'
-  | 'scenes/tools';      
+  | 'scenes/tools'
+  | 'settings/memory';      
 
  
 export interface I18nConfig {

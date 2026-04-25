@@ -3,6 +3,7 @@
 use crate::agentic::core::Message;
 use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use serde_json::Value;
@@ -17,10 +18,12 @@ pub struct ExecutionContext {
     pub dialog_turn_id: String,
     pub turn_index: usize,
     pub agent_type: String,
+    pub hidden_session: bool,
     pub workspace: Option<WorkspaceBinding>,
     pub context: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
     pub skip_tool_confirmation: bool,
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Workspace I/O services (filesystem + shell) injected into tools
     pub workspace_services: Option<WorkspaceServices>,
     /// When set, engine may end the turn after a full model round if a user message was queued.
@@ -41,6 +44,7 @@ pub struct RoundContext {
     pub model_name: String,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
 }

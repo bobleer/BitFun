@@ -296,6 +296,11 @@ impl PathManager {
         self.bitfun_home_dir().join("core").join("agentic_os")
     }
 
+    /// Get the Agentic OS global memory directory: ~/.bitfun/core/agentic_os/memory/
+    pub fn agentic_os_memory_dir(&self) -> PathBuf {
+        self.agentic_os_runtime_root().join("memory")
+    }
+
     /// Get the runtime root for a workspace: ~/.bitfun/projects/<workspace-slug>/
     pub fn project_runtime_root(&self, workspace_path: &Path) -> PathBuf {
         self.projects_root()

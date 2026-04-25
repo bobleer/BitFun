@@ -2,6 +2,7 @@
 //!
 //! Responsible for project-scoped session persistence.
 
+use crate::agentic::auto_memory::AutoMemoryState;
 use crate::agentic::core::{
     strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
     SessionState, SessionSummary,
@@ -49,6 +50,8 @@ struct StoredSessionStateFile {
     config: SessionConfig,
     snapshot_session_id: Option<String>,
     compression_state: CompressionState,
+    #[serde(default)]
+    auto_memory_state: AutoMemoryState,
     runtime_state: SessionState,
 }
 
@@ -1581,6 +1584,7 @@ impl PersistenceManager {
             config: session.config.clone(),
             snapshot_session_id: session.snapshot_session_id.clone(),
             compression_state: session.compression_state.clone(),
+            auto_memory_state: session.auto_memory_state.clone(),
             runtime_state: Self::sanitize_runtime_state(&session.state),
         };
         self.save_stored_session_state(workspace_path, &session.session_id, &state)
@@ -1625,6 +1629,11 @@ impl PersistenceManager {
             .as_ref()
             .map(|value| value.compression_state.clone())
             .unwrap_or_default();
+        let mut auto_memory_state = stored_state
+            .as_ref()
+            .map(|value| value.auto_memory_state.clone())
+            .unwrap_or_default();
+        auto_memory_state.normalize_for_turn_count(turns.len());
         let runtime_state = stored_state
             .as_ref()
             .map(|value| Self::sanitize_runtime_state(&value.runtime_state))
@@ -1645,6 +1654,7 @@ impl PersistenceManager {
             state: runtime_state,
             config,
             compression_state,
+            auto_memory_state,
             created_at,
             updated_at: last_activity_at,
             last_activity_at,
@@ -1670,6 +1680,7 @@ impl PersistenceManager {
                 },
                 snapshot_session_id: None,
                 compression_state: CompressionState::default(),
+                auto_memory_state: AutoMemoryState::default(),
                 runtime_state: SessionState::Idle,
             });
         stored_state.schema_version = SESSION_STORAGE_SCHEMA_VERSION;

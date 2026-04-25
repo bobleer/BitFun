@@ -17,12 +17,15 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
-use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
+use crate::agentic::tools::{
+    get_all_registered_tools, SubagentParentInfo, ToolRuntimeRestrictions,
+};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{ModelCapability, ModelCategory};
+use crate::service::memory_store::MemoryScope;
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
@@ -269,6 +272,7 @@ impl ExecutionEngine {
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
+        memory_scope: MemoryScope,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -277,9 +281,9 @@ impl ExecutionEngine {
 
         let base = PromptBuilderContext::new(
             workspace_path.clone(),
-            Some(context.session_id.clone()),
             Some(model_name.to_string()),
         )
+        .with_memory_scope(memory_scope)
         .with_supports_image_understanding(supports_image_understanding);
 
         let Some(workspace) = context.workspace.as_ref() else {
@@ -1134,6 +1138,7 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
+            current_agent.memory_scope(),
         )
         .await;
         let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
@@ -1424,6 +1429,7 @@ impl ExecutionEngine {
                 model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
             };
@@ -1586,6 +1592,7 @@ impl ExecutionEngine {
                     total_rounds: round_index + 1,
                     total_tools,
                     duration_ms,
+                    hidden_session: context.hidden_session,
                     subagent_parent_info: event_subagent_parent_info,
                 },
                 None,
@@ -1694,6 +1701,7 @@ impl ExecutionEngine {
             custom_data: tool_opts_custom,
             computer_use_host: None,
             cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: None,
         };
         for tool in &all_tools {

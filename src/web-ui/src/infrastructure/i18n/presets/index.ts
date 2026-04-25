@@ -81,6 +81,7 @@ export const ALL_NAMESPACES = [
   'settings/basics',
   'settings/personalization',
   'settings/permissions',
+  'settings/memory',
   'settings/ai-features',
   'settings/debug',
   'settings/editor',

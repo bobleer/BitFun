@@ -11,6 +11,7 @@ export type ConfigTab =
   | 'models'
   | 'personalization'
   | 'permissions'
+  | 'memory'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -150,6 +151,22 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           '授权',
         ],
       },
+      {
+        id: 'memory',
+        labelKey: 'configCenter.tabs.memory',
+        descriptionKey: 'configCenter.tabDescriptions.memory',
+        keywords: [
+          'memory',
+          'auto memory',
+          'auto-memory',
+          'extract memory',
+          'eligible turn',
+          'extract every',
+          '记忆',
+          '自动记忆',
+          '提炼记忆',
+        ],
+      },
     ],
   },
   {
@@ -192,6 +209,7 @@ export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'logging' || section === 'terminal') return 'basics';
   if (section === 'session-config' || section === 'personal' || section === 'companion' || section === 'debug-mode') return 'personalization';
   if (section === 'permission' || section === 'permissions' || section === 'computer-use' || section === 'tool-execution') return 'permissions';
+  if (section === 'memory' || section === 'auto-memory' || section === 'auto_memory' || section === 'extract-memory') return 'memory';
   if (section === 'ai-context') return DEFAULT_SETTINGS_TAB;
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';

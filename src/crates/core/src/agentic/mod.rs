@@ -16,8 +16,14 @@ pub mod execution;
 // Tools module
 pub mod tools;
 
+// Auto-memory orchestration
+pub mod auto_memory;
+
 // Coordination module
 pub mod coordination;
+
+// Shared-context fork execution module
+pub mod fork;
 
 /// Round-boundary yield when user queues a message during an active turn
 pub mod round_preempt;
@@ -39,6 +45,7 @@ pub use coordination::*;
 pub use core::*;
 pub use events::{queue, router, types as event_types};
 pub use execution::*;
+pub use fork::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
 pub use round_preempt::{

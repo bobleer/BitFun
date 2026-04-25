@@ -2,6 +2,7 @@
 //!
 //! Responsible for session CRUD, lifecycle management, and resource association
 
+use crate::agentic::auto_memory::{AutoMemoryExtractionCursor, AutoMemoryState};
 use crate::agentic::core::{
     CompressionState, DialogTurn, Message, MessageSemanticKind, ProcessingPhase, Session,
     SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
@@ -9,13 +10,18 @@ use crate::agentic::core::{
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::SessionContextStore;
+use crate::agentic::tools::restrictions::is_local_path_within_root;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
 };
+use crate::service::memory_store::{
+    memory_store_dir_path_for_target, MemoryScope, MemoryStoreTarget,
+};
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, TurnStatus, UserMessageData,
+    DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, ToolResultData, TurnStatus,
+    UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -318,6 +324,43 @@ impl SessionManager {
             .load_session_turns(workspace_path, session_id)
             .await?;
         Ok(Self::build_messages_from_turns(&turns))
+    }
+
+    fn tool_may_write_memory(tool_name: &str) -> bool {
+        matches!(tool_name, "Write" | "Edit" | "Delete")
+    }
+
+    fn extract_tool_target_path<'a>(
+        tool_name: &str,
+        value: &'a serde_json::Value,
+    ) -> Option<&'a str> {
+        match tool_name {
+            "Write" | "Edit" => value.get("file_path").and_then(|value| value.as_str()),
+            "Delete" => value.get("path").and_then(|value| value.as_str()),
+            _ => None,
+        }
+    }
+
+    fn tool_path_targets_memory_dir(path: &str, memory_dir: &Path) -> bool {
+        let candidate = Path::new(path);
+        if !candidate.is_absolute() {
+            return false;
+        }
+
+        is_local_path_within_root(candidate, memory_dir).unwrap_or(false)
+    }
+
+    fn tool_result_targets_memory_dir(
+        tool_name: &str,
+        tool_result: &Option<ToolResultData>,
+        memory_dir: &Path,
+    ) -> bool {
+        let Some(tool_result) = tool_result.as_ref() else {
+            return false;
+        };
+
+        Self::extract_tool_target_path(tool_name, &tool_result.result)
+            .is_some_and(|path| Self::tool_path_targets_memory_dir(path, memory_dir))
     }
 
     /// Persist the current runtime context by overwriting `snapshots/context-{turn_index}.json`.
@@ -681,6 +724,324 @@ impl SessionManager {
     /// Get session
     pub fn get_session(&self, session_id: &str) -> Option<Session> {
         self.sessions.get(session_id).map(|s| s.clone())
+    }
+
+    pub async fn get_effective_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
+        self.effective_session_workspace_path(session_id).await
+    }
+
+    pub async fn load_turns_in_range(
+        &self,
+        session_id: &str,
+        start_turn: usize,
+        end_turn: usize,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        if start_turn > end_turn {
+            return Ok(Vec::new());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let turns = self
+            .persistence_manager
+            .load_session_turns(&workspace_path, session_id)
+            .await?;
+
+        Ok(turns
+            .into_iter()
+            .filter(|turn| turn.turn_index >= start_turn && turn.turn_index <= end_turn)
+            .collect())
+    }
+
+    pub fn get_auto_memory_state(&self, session_id: &str) -> Option<AutoMemoryState> {
+        self.sessions.get(session_id).map(|session| {
+            let mut state = session.auto_memory_state.clone();
+            state.normalize_for_turn_count(session.dialog_turn_ids.len());
+            state
+        })
+    }
+
+    pub async fn turn_wrote_memory_for_scope(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        memory_scope: MemoryScope,
+    ) -> BitFunResult<bool> {
+        let session = self
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+
+        if session.config.remote_connection_id.is_some() {
+            return Ok(false);
+        }
+
+        let workspace_root = session
+            .config
+            .workspace_path
+            .as_deref()
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+        let turn_index = session
+            .dialog_turn_ids
+            .iter()
+            .position(|existing| existing == turn_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+        let storage_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+        let turn = self
+            .persistence_manager
+            .load_dialog_turn(&storage_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+        let memory_dir = match memory_scope {
+            MemoryScope::WorkspaceProject => {
+                memory_store_dir_path_for_target(MemoryStoreTarget::WorkspaceProject(
+                    workspace_root.as_path(),
+                ))
+            }
+            MemoryScope::GlobalAgenticOs => {
+                memory_store_dir_path_for_target(MemoryStoreTarget::GlobalAgenticOs)
+            }
+        };
+
+        for tool in turn
+            .model_rounds
+            .iter()
+            .flat_map(|round| round.tool_items.iter())
+            .filter(|tool| Self::tool_may_write_memory(&tool.tool_name))
+        {
+            if Self::extract_tool_target_path(&tool.tool_name, &tool.tool_call.input)
+                .is_some_and(|path| Self::tool_path_targets_memory_dir(path, &memory_dir))
+            {
+                return Ok(true);
+            }
+
+            if Self::tool_result_targets_memory_dir(&tool.tool_name, &tool.tool_result, &memory_dir)
+            {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Treat a turn as already consumed by auto-memory without running the
+    /// extractor. This is used when the main agent directly updates workspace
+    /// memory, matching Claude's "direct write advances the cursor" behavior.
+    pub async fn mark_auto_memory_consumed_through_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> BitFunResult<bool> {
+        let history_revision = self
+            .get_auto_memory_state(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+            .history_revision;
+        let turn_index = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+
+        self.complete_auto_memory_extraction_if_revision_matches(
+            session_id,
+            turn_index,
+            history_revision,
+        )
+        .await
+    }
+
+    pub async fn note_auto_memory_eligible_turn(
+        &self,
+        session_id: &str,
+        extract_every_eligible_turns: usize,
+    ) -> BitFunResult<bool> {
+        let effective_path = self.effective_session_workspace_path(session_id).await;
+
+        let Some(mut session) = self.sessions.get_mut(session_id) else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        };
+
+        let turn_count = session.dialog_turn_ids.len();
+        session
+            .auto_memory_state
+            .normalize_for_turn_count(turn_count);
+        let threshold = extract_every_eligible_turns.max(1);
+        let next_unextracted_turn = session.auto_memory_state.next_unextracted_turn;
+        let history_revision = session.auto_memory_state.history_revision;
+        let should_schedule = session
+            .auto_memory_state
+            .note_eligible_turn_and_check_threshold(threshold);
+
+        if self.config.enable_persistence {
+            if let Some(ref workspace_path) = effective_path {
+                self.persistence_manager
+                    .save_session(workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Recorded auto memory eligible turn: session_id={}, turn_count={}, next_unextracted_turn={}, history_revision={}, eligible_turns_since_last_extraction={}, extract_every_eligible_turns={}, should_schedule={}",
+            session_id,
+            turn_count,
+            next_unextracted_turn,
+            history_revision,
+            session.auto_memory_state.eligible_turns_since_last_extraction,
+            threshold,
+            should_schedule
+        );
+
+        Ok(should_schedule)
+    }
+
+    pub async fn note_auto_memory_rollback(
+        &self,
+        session_id: &str,
+        target_turn: usize,
+    ) -> BitFunResult<()> {
+        let effective_path = self.effective_session_workspace_path(session_id).await;
+
+        let Some(mut session) = self.sessions.get_mut(session_id) else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        };
+
+        let turn_count = session.dialog_turn_ids.len();
+        session
+            .auto_memory_state
+            .normalize_for_turn_count(turn_count);
+        let previous_next_unextracted_turn = session.auto_memory_state.next_unextracted_turn;
+        let previous_history_revision = session.auto_memory_state.history_revision;
+        session.auto_memory_state.note_history_rollback(target_turn);
+        debug!(
+            "Reset auto memory state after rollback: session_id={}, target_turn={}, previous_next_unextracted_turn={}, next_unextracted_turn={}, previous_history_revision={}, history_revision={}",
+            session_id,
+            target_turn,
+            previous_next_unextracted_turn,
+            session.auto_memory_state.next_unextracted_turn,
+            previous_history_revision,
+            session.auto_memory_state.history_revision
+        );
+
+        if self.config.enable_persistence {
+            if let Some(ref workspace_path) = effective_path {
+                self.persistence_manager
+                    .save_session(workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn complete_auto_memory_extraction_if_revision_matches(
+        &self,
+        session_id: &str,
+        through_turn: usize,
+        history_revision: u64,
+    ) -> BitFunResult<bool> {
+        let effective_path = self.effective_session_workspace_path(session_id).await;
+
+        let Some(mut session) = self.sessions.get_mut(session_id) else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        };
+
+        let turn_count = session.dialog_turn_ids.len();
+        session
+            .auto_memory_state
+            .normalize_for_turn_count(turn_count);
+        let previous_next_unextracted_turn = session.auto_memory_state.next_unextracted_turn;
+        let previous_eligible_turns = session
+            .auto_memory_state
+            .eligible_turns_since_last_extraction;
+        let current_history_revision = session.auto_memory_state.history_revision;
+
+        if current_history_revision != history_revision {
+            debug!(
+                "Skipped auto memory cursor commit because history revision changed: session_id={}, through_turn={}, requested_history_revision={}, current_history_revision={}, next_unextracted_turn={}",
+                session_id,
+                through_turn,
+                history_revision,
+                current_history_revision,
+                previous_next_unextracted_turn
+            );
+            return Ok(false);
+        }
+
+        session
+            .auto_memory_state
+            .mark_extracted_through(through_turn, turn_count);
+
+        if self.config.enable_persistence {
+            if let Some(ref workspace_path) = effective_path {
+                self.persistence_manager
+                    .save_session(workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Advanced auto memory cursor: session_id={}, through_turn={}, previous_next_unextracted_turn={}, next_unextracted_turn={}, history_revision={}, previous_eligible_turns={}, eligible_turns_since_last_extraction={}",
+            session_id,
+            through_turn,
+            previous_next_unextracted_turn,
+            session.auto_memory_state.next_unextracted_turn,
+            session.auto_memory_state.history_revision,
+            previous_eligible_turns,
+            session.auto_memory_state.eligible_turns_since_last_extraction
+        );
+
+        Ok(true)
+    }
+
+    pub fn next_auto_memory_cursor(&self, session_id: &str) -> Option<AutoMemoryExtractionCursor> {
+        let session = self.sessions.get(session_id)?;
+
+        let turn_count = session.dialog_turn_ids.len();
+        let mut state = session.auto_memory_state.clone();
+        state.normalize_for_turn_count(turn_count);
+
+        if !state.has_pending_turns(turn_count) {
+            return None;
+        }
+
+        let from_turn = state.next_unextracted_turn;
+        let through_turn = turn_count.saturating_sub(1);
+
+        Some(AutoMemoryExtractionCursor {
+            from_turn,
+            through_turn,
+            history_revision: state.history_revision,
+        })
     }
 
     /// Update session state
@@ -1193,9 +1554,27 @@ impl SessionManager {
 
         // 3) Truncate session turn list & persist
         if let Some(mut session) = self.sessions.get_mut(session_id) {
+            let previous_turn_count = session.dialog_turn_ids.len();
+            session
+                .auto_memory_state
+                .normalize_for_turn_count(previous_turn_count);
+            let previous_next_unextracted_turn = session.auto_memory_state.next_unextracted_turn;
+            let previous_history_revision = session.auto_memory_state.history_revision;
             if session.dialog_turn_ids.len() > target_turn {
                 session.dialog_turn_ids.truncate(target_turn);
             }
+            session.auto_memory_state.note_history_rollback(target_turn);
+            debug!(
+                "Rolled back session context and reset auto memory state: session_id={}, target_turn={}, previous_turn_count={}, next_turn_count={}, previous_next_unextracted_turn={}, next_unextracted_turn={}, previous_history_revision={}, history_revision={}",
+                session_id,
+                target_turn,
+                previous_turn_count,
+                session.dialog_turn_ids.len(),
+                previous_next_unextracted_turn,
+                session.auto_memory_state.next_unextracted_turn,
+                previous_history_revision,
+                session.auto_memory_state.history_revision
+            );
             session.state = SessionState::Idle;
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
@@ -2090,8 +2469,149 @@ impl SessionManager {
 
 #[cfg(test)]
 mod tests {
-    use super::SessionManager;
-    use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
+    use super::{SessionManager, SessionManagerConfig};
+    use crate::agentic::core::SessionConfig;
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::SessionContextStore;
+    use crate::infrastructure::PathManager;
+    use crate::service::memory_store::{
+        memory_store_dir_path_for_target, MemoryScope, MemoryStoreTarget,
+    };
+    use crate::service::session::{
+        DialogTurnData, DialogTurnKind, ModelRoundData, ToolCallData, ToolItemData, TurnStatus,
+        UserMessageData,
+    };
+    use serde_json::json;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("bitfun-session-manager-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn build_test_session_manager() -> (Arc<PersistenceManager>, SessionManager) {
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager.clone(),
+            SessionManagerConfig {
+                auto_save_interval: std::time::Duration::from_secs(3600),
+                session_idle_timeout: std::time::Duration::from_secs(3600),
+                enable_persistence: true,
+                ..SessionManagerConfig::default()
+            },
+        );
+        (persistence_manager, manager)
+    }
+
+    fn build_tool_item(
+        tool_name: &str,
+        tool_input: serde_json::Value,
+        tool_result: Option<serde_json::Value>,
+    ) -> ToolItemData {
+        ToolItemData {
+            id: format!("tool-{}", Uuid::new_v4()),
+            tool_name: tool_name.to_string(),
+            tool_call: ToolCallData {
+                input: tool_input,
+                id: format!("call-{}", Uuid::new_v4()),
+            },
+            tool_result: tool_result.map(|result| crate::service::session::ToolResultData {
+                result,
+                success: true,
+                result_for_assistant: None,
+                error: None,
+                duration_ms: Some(1),
+            }),
+            ai_intent: None,
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            order_index: Some(0),
+            is_subagent_item: None,
+            parent_task_tool_id: None,
+            subagent_session_id: None,
+            status: Some("completed".to_string()),
+            interruption_reason: None,
+        }
+    }
+
+    async fn create_session_with_turn(
+        manager: &SessionManager,
+        workspace: &Path,
+    ) -> (String, String) {
+        let session = manager
+            .create_session_with_id_and_details(
+                None,
+                "Test Session".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+                None,
+                crate::agentic::core::SessionKind::Standard,
+            )
+            .await
+            .expect("session should be created");
+
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "remember this".to_string(),
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("turn should start");
+
+        (session.session_id, turn_id)
+    }
+
+    async fn complete_turn(manager: &SessionManager, session_id: &str, turn_id: &str) {
+        manager
+            .complete_dialog_turn(
+                session_id,
+                turn_id,
+                "done".to_string(),
+                crate::agentic::core::TurnStats {
+                    total_rounds: 1,
+                    total_tools: 0,
+                    total_tokens: 0,
+                    duration_ms: 1,
+                },
+            )
+            .await
+            .expect("turn should complete");
+        manager
+            .update_session_state(session_id, crate::agentic::core::SessionState::Idle)
+            .await
+            .expect("session should become idle");
+    }
 
     #[test]
     fn build_messages_from_turns_skips_manual_compaction_turns() {
@@ -2152,5 +2672,284 @@ mod tests {
         let title = SessionManager::fallback_session_title("   ", 20);
 
         assert_eq!(title, "New Session");
+    }
+
+    #[tokio::test]
+    async fn turn_wrote_memory_for_workspace_scope_detects_memory_write_tool_call() {
+        let workspace = TestWorkspace::new();
+        let (persistence_manager, manager) = build_test_session_manager();
+        let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
+
+        let memory_file =
+            memory_store_dir_path_for_target(MemoryStoreTarget::WorkspaceProject(workspace.path()))
+                .join("user_pref.md");
+        let mut turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session_id, 0)
+            .await
+            .expect("turn load should succeed")
+            .expect("turn should exist");
+        turn.status = TurnStatus::Completed;
+        turn.model_rounds = vec![ModelRoundData {
+            id: format!("round-{}", Uuid::new_v4()),
+            turn_id: turn.turn_id.clone(),
+            round_index: 0,
+            timestamp: 1,
+            text_items: Vec::new(),
+            tool_items: vec![build_tool_item(
+                "Write",
+                json!({
+                    "file_path": memory_file.to_string_lossy().to_string(),
+                    "content": "memory"
+                }),
+                None,
+            )],
+            thinking_items: Vec::new(),
+            start_time: 1,
+            end_time: Some(2),
+            status: "completed".to_string(),
+        }];
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let detected = manager
+            .turn_wrote_memory_for_scope(
+                &session_id,
+                &turn_id,
+                MemoryScope::WorkspaceProject,
+            )
+            .await
+            .expect("memory write detection should succeed");
+
+        assert!(detected);
+    }
+
+    #[tokio::test]
+    async fn turn_wrote_memory_for_workspace_scope_ignores_non_memory_write_tool_call() {
+        let workspace = TestWorkspace::new();
+        let (persistence_manager, manager) = build_test_session_manager();
+        let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
+
+        let regular_file = workspace.path().join("src").join("lib.rs");
+        let mut turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session_id, 0)
+            .await
+            .expect("turn load should succeed")
+            .expect("turn should exist");
+        turn.status = TurnStatus::Completed;
+        turn.model_rounds = vec![ModelRoundData {
+            id: format!("round-{}", Uuid::new_v4()),
+            turn_id: turn.turn_id.clone(),
+            round_index: 0,
+            timestamp: 1,
+            text_items: Vec::new(),
+            tool_items: vec![build_tool_item(
+                "Write",
+                json!({
+                    "file_path": regular_file.to_string_lossy().to_string(),
+                    "content": "fn main() {}"
+                }),
+                None,
+            )],
+            thinking_items: Vec::new(),
+            start_time: 1,
+            end_time: Some(2),
+            status: "completed".to_string(),
+        }];
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let detected = manager
+            .turn_wrote_memory_for_scope(
+                &session_id,
+                &turn_id,
+                MemoryScope::WorkspaceProject,
+            )
+            .await
+            .expect("memory write detection should succeed");
+
+        assert!(!detected);
+    }
+
+    #[tokio::test]
+    async fn turn_wrote_memory_for_global_scope_detects_global_memory_write_tool_call() {
+        let workspace = TestWorkspace::new();
+        let (persistence_manager, manager) = build_test_session_manager();
+        let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
+
+        let memory_file =
+            memory_store_dir_path_for_target(MemoryStoreTarget::GlobalAgenticOs).join("user.md");
+        let mut turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session_id, 0)
+            .await
+            .expect("turn load should succeed")
+            .expect("turn should exist");
+        turn.status = TurnStatus::Completed;
+        turn.model_rounds = vec![ModelRoundData {
+            id: format!("round-{}", Uuid::new_v4()),
+            turn_id: turn.turn_id.clone(),
+            round_index: 0,
+            timestamp: 1,
+            text_items: Vec::new(),
+            tool_items: vec![build_tool_item(
+                "Write",
+                json!({
+                    "file_path": memory_file.to_string_lossy().to_string(),
+                    "content": "memory"
+                }),
+                None,
+            )],
+            thinking_items: Vec::new(),
+            start_time: 1,
+            end_time: Some(2),
+            status: "completed".to_string(),
+        }];
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let detected = manager
+            .turn_wrote_memory_for_scope(&session_id, &turn_id, MemoryScope::GlobalAgenticOs)
+            .await
+            .expect("global memory write detection should succeed");
+
+        assert!(detected);
+    }
+
+    #[tokio::test]
+    async fn note_auto_memory_eligible_turn_requires_threshold_before_scheduling() {
+        let workspace = TestWorkspace::new();
+        let (_, manager) = build_test_session_manager();
+        let (session_id, first_turn_id) =
+            create_session_with_turn(&manager, workspace.path()).await;
+        complete_turn(&manager, &session_id, &first_turn_id).await;
+
+        let first_ready = manager
+            .note_auto_memory_eligible_turn(&session_id, 2)
+            .await
+            .expect("first eligible turn should update state");
+        assert!(!first_ready);
+        let after_first = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(after_first.eligible_turns_since_last_extraction, 1);
+
+        let second_turn_id = manager
+            .start_dialog_turn(&session_id, "second".to_string(), None, None, None)
+            .await
+            .expect("second turn should start");
+        complete_turn(&manager, &session_id, &second_turn_id).await;
+
+        let second_ready = manager
+            .note_auto_memory_eligible_turn(&session_id, 2)
+            .await
+            .expect("second eligible turn should update state");
+        assert!(second_ready);
+        let after_second = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(after_second.eligible_turns_since_last_extraction, 2);
+    }
+
+    #[tokio::test]
+    async fn note_auto_memory_rollback_resets_eligible_turn_counter() {
+        let workspace = TestWorkspace::new();
+        let (_, manager) = build_test_session_manager();
+        let (session_id, turn_id) = create_session_with_turn(&manager, workspace.path()).await;
+        complete_turn(&manager, &session_id, &turn_id).await;
+
+        let ready = manager
+            .note_auto_memory_eligible_turn(&session_id, 3)
+            .await
+            .expect("eligible turn should update state");
+        assert!(!ready);
+
+        manager
+            .note_auto_memory_rollback(&session_id, 0)
+            .await
+            .expect("rollback should update state");
+
+        let state = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(state.eligible_turns_since_last_extraction, 0);
+    }
+
+    #[tokio::test]
+    async fn auto_memory_eligible_turn_counter_only_resets_after_extraction_commit() {
+        let workspace = TestWorkspace::new();
+        let (_, manager) = build_test_session_manager();
+        let (session_id, first_turn_id) =
+            create_session_with_turn(&manager, workspace.path()).await;
+        complete_turn(&manager, &session_id, &first_turn_id).await;
+
+        let second_turn_id = manager
+            .start_dialog_turn(&session_id, "second".to_string(), None, None, None)
+            .await
+            .expect("second turn should start");
+        complete_turn(&manager, &session_id, &second_turn_id).await;
+
+        let ready = manager
+            .note_auto_memory_eligible_turn(&session_id, 2)
+            .await
+            .expect("first eligible turn should update state");
+        assert!(!ready);
+        let ready = manager
+            .note_auto_memory_eligible_turn(&session_id, 2)
+            .await
+            .expect("second eligible turn should update state");
+        assert!(ready);
+
+        let before_commit = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(before_commit.eligible_turns_since_last_extraction, 2);
+
+        let committed = manager
+            .complete_auto_memory_extraction_if_revision_matches(&session_id, 1, 0)
+            .await
+            .expect("commit should succeed");
+        assert!(committed);
+
+        let after_commit = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(after_commit.eligible_turns_since_last_extraction, 0);
+    }
+
+    #[tokio::test]
+    async fn mark_auto_memory_consumed_through_turn_advances_cursor_to_latest_turn() {
+        let workspace = TestWorkspace::new();
+        let (_, manager) = build_test_session_manager();
+        let (session_id, first_turn_id) =
+            create_session_with_turn(&manager, workspace.path()).await;
+        complete_turn(&manager, &session_id, &first_turn_id).await;
+
+        let second_turn_id = manager
+            .start_dialog_turn(&session_id, "save to memory".to_string(), None, None, None)
+            .await
+            .expect("second turn should start");
+        complete_turn(&manager, &session_id, &second_turn_id).await;
+
+        let before = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(before.next_unextracted_turn, 0);
+
+        let advanced = manager
+            .mark_auto_memory_consumed_through_turn(&session_id, &second_turn_id)
+            .await
+            .expect("cursor advance should succeed");
+
+        assert!(advanced);
+        let after = manager
+            .get_auto_memory_state(&session_id)
+            .expect("state should exist");
+        assert_eq!(after.next_unextracted_turn, 2);
+        assert!(manager.next_auto_memory_cursor(&session_id).is_none());
     }
 }

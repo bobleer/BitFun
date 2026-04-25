@@ -4,24 +4,36 @@
 
 use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
 use crate::agentic::agents::get_agent_registry;
+use crate::agentic::auto_memory::{
+    build_auto_memory_runtime_restrictions, build_extract_prompt,
+    count_recent_model_visible_messages, AutoMemoryManager,
+};
 use crate::agentic::core::{
     has_prompt_markup, Message, MessageContent, ProcessingPhase, PromptEnvelope, Session,
     SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, EventRouter, EventSubscriber,
+    SessionBackgroundActivityKind, SessionBackgroundActivityStatus,
 };
 use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, ExecutionEngine};
+use crate::agentic::fork::{ForkContextSnapshot, ForkExecutionRequest, ForkExecutionResult};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::session::SessionManager;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
+use crate::service::memory_store::{
+    build_memory_manifest_for_target, ensure_memory_store_for_target,
+    memory_store_dir_path_for_target, MemoryScope, MemoryStoreTarget,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -31,6 +43,79 @@ use tokio_util::sync::CancellationToken;
 
 const MANUAL_COMPACTION_COMMAND: &str = "/compact";
 const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
+const AUTO_MEMORY_FORK_MAX_TURNS: usize = 5;
+const AUTO_MEMORY_ACTIVITY_ID: &str = "auto_memory";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutoMemoryPostTurnAction {
+    Skip,
+    Schedule,
+}
+
+fn decide_auto_memory_post_turn_action(
+    session_kind: SessionKind,
+    turn_wrote_memory: Option<bool>,
+) -> AutoMemoryPostTurnAction {
+    if matches!(session_kind, SessionKind::Subagent) {
+        return AutoMemoryPostTurnAction::Skip;
+    }
+
+    match turn_wrote_memory {
+        Some(true) => AutoMemoryPostTurnAction::Skip,
+        Some(false) | None => AutoMemoryPostTurnAction::Schedule,
+    }
+}
+
+fn resolve_auto_memory_scope(agent_type: &str, workspace_path: &Path) -> MemoryScope {
+    get_agent_registry()
+        .get_agent(agent_type, Some(workspace_path))
+        .map(|agent| agent.memory_scope())
+        .unwrap_or(MemoryScope::WorkspaceProject)
+}
+
+fn resolve_session_auto_memory_scope(session: &Session) -> Option<MemoryScope> {
+    if session.config.remote_connection_id.is_some() {
+        return None;
+    }
+
+    session
+        .config
+        .workspace_path
+        .as_deref()
+        .map(|path| resolve_auto_memory_scope(&session.agent_type, Path::new(path)))
+}
+
+fn auto_memory_scope_config(
+    config: &crate::service::config::types::AutoMemoryConfig,
+    scope: MemoryScope,
+) -> &crate::service::config::types::AutoMemoryScopeConfig {
+    match scope {
+        MemoryScope::WorkspaceProject => &config.workspace,
+        MemoryScope::GlobalAgenticOs => &config.global,
+    }
+}
+
+fn build_auto_memory_store_key(target: MemoryStoreTarget<'_>) -> String {
+    memory_store_dir_path_for_target(target)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn build_auto_memory_activity_event(
+    session_id: &str,
+    status: SessionBackgroundActivityStatus,
+    target_turn_id: Option<String>,
+    detail: Option<String>,
+) -> AgenticEvent {
+    AgenticEvent::SessionBackgroundActivityUpdated {
+        session_id: session_id.to_string(),
+        activity_id: AUTO_MEMORY_ACTIVITY_ID.to_string(),
+        kind: SessionBackgroundActivityKind::AutoMemory,
+        status,
+        target_turn_id,
+        detail,
+    }
+}
 
 /// Subagent execution result
 ///
@@ -39,6 +124,17 @@ const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
 pub struct SubagentResult {
     /// AI text response
     pub text: String,
+}
+
+struct HiddenSubagentExecutionRequest {
+    session_name: String,
+    agent_type: String,
+    session_config: SessionConfig,
+    initial_messages: Vec<Message>,
+    created_by: Option<String>,
+    subagent_parent_info: Option<SubagentParentInfo>,
+    context: HashMap<String, String>,
+    runtime_tool_restrictions: ToolRuntimeRestrictions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +203,7 @@ pub struct ConversationCoordinator {
     session_manager: Arc<SessionManager>,
     execution_engine: Arc<ExecutionEngine>,
     tool_pipeline: Arc<ToolPipeline>,
+    auto_memory_manager: Arc<AutoMemoryManager>,
     event_queue: Arc<EventQueue>,
     event_router: Arc<EventRouter>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
@@ -415,6 +512,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_manager,
             execution_engine,
             tool_pipeline,
+            auto_memory_manager: Arc::new(AutoMemoryManager::new()),
             event_queue,
             event_router,
             scheduler_notify_tx: OnceLock::new(),
@@ -684,16 +782,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
-    /// Create a subagent session for internal AI execution.
+    /// Create a hidden subagent session for internal AI execution.
     /// Unlike `create_session`, this does NOT emit `SessionCreated` to the transport layer,
-    /// because subagent sessions are internal implementation details of the execution engine
+    /// because hidden child sessions are internal implementation details of the execution engine
     /// and must never appear as top-level items in the UI.
-    async fn create_subagent_session(
+    async fn create_hidden_subagent_session(
         &self,
         session_name: String,
         agent_type: String,
         config: SessionConfig,
-        parent_info: &SubagentParentInfo,
+        created_by: Option<String>,
     ) -> BitFunResult<Session> {
         self.session_manager
             .create_session_with_id_and_details(
@@ -701,10 +799,43 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_name,
                 agent_type,
                 config,
-                Some(format!("session-{}", parent_info.session_id)),
+                created_by,
                 SessionKind::Subagent,
             )
             .await
+    }
+
+    async fn load_session_context_messages(&self, session: &Session) -> BitFunResult<Vec<Message>> {
+        let session_id = &session.session_id;
+        let mut context_messages = self
+            .session_manager
+            .get_context_messages(session_id)
+            .await?;
+
+        if context_messages.is_empty() && !session.dialog_turn_ids.is_empty() {
+            if let Some(workspace_path) = session.config.workspace_path.as_deref() {
+                match self
+                    .session_manager
+                    .restore_session(Path::new(workspace_path), session_id)
+                    .await
+                {
+                    Ok(_) => {
+                        context_messages = self
+                            .session_manager
+                            .get_context_messages(session_id)
+                            .await?;
+                    }
+                    Err(e) => {
+                        debug!(
+                            "Failed to restore parent session context for fork capture: session_id={}, error={}",
+                            session_id, e
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(context_messages)
     }
 
     async fn wrap_user_input(
@@ -1050,6 +1181,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     total_rounds: 1,
                     total_tools: 1,
                     duration_ms: outcome.duration_ms,
+                    hidden_session: matches!(session.kind, SessionKind::Subagent),
                     subagent_parent_info: None,
                 })
                 .await;
@@ -1282,6 +1414,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
+        self.auto_memory_manager.cancel_session(&session_id);
+        self.emit_event(build_auto_memory_activity_event(
+            &session_id,
+            SessionBackgroundActivityStatus::Dismissed,
+            None,
+            None,
+        ))
+        .await;
+
         let original_user_input = original_user_input.unwrap_or_else(|| user_input.clone());
 
         let mut user_message_metadata = extra_user_message_metadata;
@@ -1461,10 +1602,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: turn_id.clone(),
             turn_index,
             agent_type: effective_agent_type.clone(),
+            hidden_session: matches!(session.kind, SessionKind::Subagent),
             workspace: session_workspace,
             context: context_vars,
             subagent_parent_info: None,
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
             round_preempt: self.round_preempt_source.get().cloned(),
         };
@@ -1521,6 +1664,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let effective_agent_type_clone = effective_agent_type.clone();
         let user_message_metadata_clone = user_message_metadata;
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
+        let session_kind = session.kind;
+        let auto_memory_scope = resolve_session_auto_memory_scope(&session);
+        let auto_memory_store_key = if session.config.remote_connection_id.is_none() {
+            session.config.workspace_path.as_deref().map(|path| {
+                let workspace_path = Path::new(path);
+                let target = match auto_memory_scope.unwrap_or(MemoryScope::WorkspaceProject) {
+                    MemoryScope::WorkspaceProject => {
+                        MemoryStoreTarget::WorkspaceProject(workspace_path)
+                    }
+                    MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
+                };
+                build_auto_memory_store_key(target)
+            })
+        } else {
+            None
+        };
 
         tokio::spawn(async move {
             // Note: Don't check cancellation here as cancel token hasn't been created yet
@@ -1569,6 +1728,144 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     let _ = session_manager
                         .update_session_state(&session_id_clone, SessionState::Idle)
                         .await;
+
+                    let turn_wrote_memory = if matches!(session_kind, SessionKind::Subagent) {
+                        None
+                    } else if let Some(memory_scope) = auto_memory_scope {
+                        match session_manager
+                            .turn_wrote_memory_for_scope(
+                                &session_id_clone,
+                                &turn_id_clone,
+                                memory_scope,
+                            )
+                            .await
+                        {
+                            Ok(wrote_memory) => Some(wrote_memory),
+                            Err(error) => {
+                                warn!(
+                                    "Failed to inspect turn for direct memory writes; scheduling auto memory anyway: session_id={}, turn_id={}, scope={}, error={}",
+                                    session_id_clone, turn_id_clone, memory_scope.as_label(), error
+                                );
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    match decide_auto_memory_post_turn_action(session_kind, turn_wrote_memory) {
+                        AutoMemoryPostTurnAction::Skip => {
+                            if matches!(turn_wrote_memory, Some(true)) {
+                                debug!(
+                                    "Skipping auto memory extractor because the completed turn already updated memory files: session_id={}, turn_id={}, scope={}",
+                                    session_id_clone,
+                                    turn_id_clone,
+                                    auto_memory_scope
+                                        .unwrap_or(MemoryScope::WorkspaceProject)
+                                        .as_label()
+                                );
+                                match session_manager
+                                    .mark_auto_memory_consumed_through_turn(
+                                        &session_id_clone,
+                                        &turn_id_clone,
+                                    )
+                                    .await
+                                {
+                                    Ok(true) => {}
+                                    Ok(false) => {}
+                                    Err(error) => {
+                                        warn!(
+                                            "Failed to advance auto memory cursor after direct memory write: session_id={}, turn_id={}, error={}",
+                                            session_id_clone, turn_id_clone, error
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        AutoMemoryPostTurnAction::Schedule => {
+                            if let (Some(memory_store_key), Some(auto_memory_scope)) =
+                                (auto_memory_store_key.as_ref(), auto_memory_scope)
+                            {
+                                let auto_memory_config = auto_memory_runtime_config().await;
+                                let scope_config = auto_memory_scope_config(
+                                    &auto_memory_config,
+                                    auto_memory_scope,
+                                );
+                                let extract_every_eligible_turns =
+                                    scope_config.extract_every_eligible_turns.max(1) as usize;
+                                match session_manager
+                                    .note_auto_memory_eligible_turn(
+                                        &session_id_clone,
+                                        extract_every_eligible_turns,
+                                    )
+                                    .await
+                                {
+                                    Ok(true) => {
+                                        if !scope_config.enabled {
+                                            debug!(
+                                                "Auto memory is disabled for scope; eligible-turn threshold has been reached but extraction will stay pending: session_id={}, turn_id={}, scope={}, extract_every_eligible_turns={}",
+                                                session_id_clone, turn_id_clone, auto_memory_scope.as_label(), extract_every_eligible_turns
+                                            );
+                                        } else {
+                                            debug!(
+                                                "Eligible-turn threshold reached; queueing auto memory extraction: session_id={}, turn_id={}, scope={}, extract_every_eligible_turns={}",
+                                                session_id_clone, turn_id_clone, auto_memory_scope.as_label(), extract_every_eligible_turns
+                                            );
+                                            if let Some(coordinator) = get_global_coordinator() {
+                                                coordinator
+                                                    .auto_memory_manager
+                                                    .schedule_after_turn(
+                                                        coordinator.clone(),
+                                                        session_id_clone.clone(),
+                                                        memory_store_key.clone(),
+                                                    );
+                                            }
+                                        }
+                                    }
+                                    Ok(false) => {
+                                        if !scope_config.enabled {
+                                            debug!(
+                                                "Recorded auto memory eligible turn while auto memory is disabled for scope: session_id={}, turn_id={}, scope={}, extract_every_eligible_turns={}",
+                                                session_id_clone, turn_id_clone, auto_memory_scope.as_label(), extract_every_eligible_turns
+                                            );
+                                        } else {
+                                            debug!(
+                                                "Deferred auto memory extraction until eligible-turn threshold is reached: session_id={}, turn_id={}, scope={}, extract_every_eligible_turns={}",
+                                                session_id_clone, turn_id_clone, auto_memory_scope.as_label(), extract_every_eligible_turns
+                                            );
+                                        }
+                                    }
+                                    Err(error) => {
+                                        if !scope_config.enabled {
+                                            warn!(
+                                                "Failed to record auto memory eligible turn while auto memory is disabled for scope: session_id={}, turn_id={}, scope={}, error={}",
+                                                session_id_clone, turn_id_clone, auto_memory_scope.as_label(), error
+                                            );
+                                        } else {
+                                            warn!(
+                                                "Failed to update auto memory eligible-turn throttle; scheduling immediately: session_id={}, turn_id={}, scope={}, error={}",
+                                                session_id_clone, turn_id_clone, auto_memory_scope.as_label(), error
+                                            );
+                                            if let Some(coordinator) = get_global_coordinator() {
+                                                coordinator
+                                                    .auto_memory_manager
+                                                    .schedule_after_turn(
+                                                        coordinator.clone(),
+                                                        session_id_clone.clone(),
+                                                        memory_store_key.clone(),
+                                                    );
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                debug!(
+                                    "Skipping auto memory eligible-turn tracking because no local workspace key is available: session_id={}, turn_id={}",
+                                    session_id_clone, turn_id_clone
+                                );
+                            }
+                        }
+                    }
 
                     if let Some(tx) = &scheduler_notify_tx {
                         let _ = tx.try_send((
@@ -1703,6 +2000,256 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(())
     }
 
+    pub fn cancel_auto_memory_for_session(&self, session_id: &str) {
+        self.auto_memory_manager.cancel_session(session_id);
+        let event_queue = self.event_queue.clone();
+        let session_id = session_id.to_string();
+        tokio::spawn(async move {
+            let _ = event_queue
+                .enqueue(
+                    build_auto_memory_activity_event(
+                        &session_id,
+                        SessionBackgroundActivityStatus::Dismissed,
+                        None,
+                        None,
+                    ),
+                    Some(EventPriority::High),
+                )
+                .await;
+        });
+    }
+
+    pub async fn has_pending_auto_memory(&self, session_id: &str) -> bool {
+        let Some(session) = self.session_manager.get_session(session_id) else {
+            return false;
+        };
+
+        if matches!(session.kind, SessionKind::Subagent)
+            || session.config.remote_connection_id.is_some()
+            || matches!(session.state, SessionState::Processing { .. })
+        {
+            return false;
+        }
+
+        let Some(auto_memory_scope) = resolve_session_auto_memory_scope(&session) else {
+            return false;
+        };
+
+        if !auto_memory_scope_runtime_config(auto_memory_scope)
+            .await
+            .enabled
+        {
+            return false;
+        }
+
+        self.session_manager
+            .next_auto_memory_cursor(session_id)
+            .is_some()
+    }
+
+    pub async fn run_auto_memory_cycle(
+        &self,
+        session_id: &str,
+        cancel_token: &CancellationToken,
+    ) -> BitFunResult<bool> {
+        if cancel_token.is_cancelled() {
+            return Err(BitFunError::Cancelled(
+                "Auto memory task has been cancelled".to_string(),
+            ));
+        }
+
+        let Some(session) = self.session_manager.get_session(session_id) else {
+            return Ok(false);
+        };
+
+        if matches!(session.kind, SessionKind::Subagent)
+            || session.config.remote_connection_id.is_some()
+            || matches!(session.state, SessionState::Processing { .. })
+        {
+            return Ok(false);
+        }
+
+        let Some(auto_memory_scope) = resolve_session_auto_memory_scope(&session) else {
+            return Ok(false);
+        };
+
+        if !auto_memory_scope_runtime_config(auto_memory_scope)
+            .await
+            .enabled
+        {
+            return Ok(false);
+        }
+
+        let Some(cursor) = self.session_manager.next_auto_memory_cursor(session_id) else {
+            return Ok(false);
+        };
+        let target_turn_id = session.dialog_turn_ids.get(cursor.through_turn).cloned();
+
+        debug!(
+            "Starting auto memory cycle: session_id={}, from_turn={}, through_turn={}, history_revision={}",
+            session_id, cursor.from_turn, cursor.through_turn, cursor.history_revision
+        );
+
+        self.emit_event(build_auto_memory_activity_event(
+            session_id,
+            SessionBackgroundActivityStatus::Running,
+            target_turn_id.clone(),
+            None,
+        ))
+        .await;
+
+        let cycle_result = async {
+            let pending_turns = self
+                .session_manager
+                .load_turns_in_range(session_id, cursor.from_turn, cursor.through_turn)
+                .await?;
+            let has_model_visible_turns = pending_turns
+                .iter()
+                .any(|turn| turn.kind.is_model_visible());
+
+            if !has_model_visible_turns {
+                let advanced = self
+                    .session_manager
+                    .complete_auto_memory_extraction_if_revision_matches(
+                        session_id,
+                        cursor.through_turn,
+                        cursor.history_revision,
+                    )
+                    .await?;
+                let _ = advanced;
+                return Ok(true);
+            }
+
+            if cancel_token.is_cancelled() {
+                return Err(BitFunError::Cancelled(
+                    "Auto memory task has been cancelled".to_string(),
+                ));
+            }
+
+            let workspace_root =
+                PathBuf::from(session.config.workspace_path.clone().ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Session workspace_path is missing: {}",
+                        session_id
+                    ))
+                })?);
+            let memory_scope = resolve_auto_memory_scope(&session.agent_type, &workspace_root);
+            let memory_target = match memory_scope {
+                MemoryScope::WorkspaceProject => {
+                    MemoryStoreTarget::WorkspaceProject(workspace_root.as_path())
+                }
+                MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
+            };
+            ensure_memory_store_for_target(memory_target).await?;
+            let memory_dir = memory_store_dir_path_for_target(memory_target);
+            let memory_dir_display = memory_dir.to_string_lossy().replace('\\', "/");
+            let existing_memories = build_memory_manifest_for_target(memory_target).await?;
+            let snapshot = self.capture_fork_context_snapshot(session_id).await?;
+            let recent_message_count = count_recent_model_visible_messages(
+                &snapshot.messages,
+                cursor
+                    .from_turn
+                    .checked_sub(1)
+                    .and_then(|index| session.dialog_turn_ids.get(index))
+                    .map(String::as_str),
+            );
+
+            let prompt = build_extract_prompt(
+                recent_message_count,
+                &memory_dir_display,
+                existing_memories.as_deref(),
+                memory_scope,
+            );
+
+            debug!(
+                "Launching auto memory fork: session_id={}, from_turn={}, through_turn={}, pending_turns={}, recent_message_count={}, inherited_messages={}, has_existing_memory_manifest={}, scope={}",
+                session_id,
+                cursor.from_turn,
+                cursor.through_turn,
+                pending_turns.len(),
+                recent_message_count,
+                snapshot.inherited_message_count(),
+                existing_memories.is_some(),
+                memory_scope.as_label()
+            );
+
+            let result = self
+                .execute_forked_agent(
+                    ForkExecutionRequest {
+                        snapshot,
+                        agent_type: session.agent_type.clone(),
+                        description: "Auto memory extraction".to_string(),
+                        prompt_messages: vec![Message::user(prompt)],
+                        context: HashMap::new(),
+                        runtime_tool_restrictions: build_auto_memory_runtime_restrictions(
+                            &memory_dir.to_string_lossy(),
+                        ),
+                        max_turns: Some(AUTO_MEMORY_FORK_MAX_TURNS),
+                    },
+                    Some(cancel_token),
+                )
+                .await?;
+
+            debug!(
+                "Auto memory fork completed: session_id={}, from_turn={}, through_turn={}, inherited_messages={}, prompt_messages={}, child_text_len={}",
+                session_id,
+                cursor.from_turn,
+                cursor.through_turn,
+                result.inherited_message_count,
+                result.prompt_message_count,
+                result.text.len()
+            );
+
+            let advanced = self
+                .session_manager
+                .complete_auto_memory_extraction_if_revision_matches(
+                    session_id,
+                    cursor.through_turn,
+                    cursor.history_revision,
+                )
+                .await?;
+            let _ = advanced;
+
+            Ok(true)
+        }
+        .await;
+
+        match cycle_result {
+            Ok(did_run) => {
+                if did_run {
+                    self.emit_event(build_auto_memory_activity_event(
+                        session_id,
+                        SessionBackgroundActivityStatus::Completed,
+                        target_turn_id,
+                        None,
+                    ))
+                    .await;
+                }
+                Ok(did_run)
+            }
+            Err(BitFunError::Cancelled(message)) => {
+                self.emit_event(build_auto_memory_activity_event(
+                    session_id,
+                    SessionBackgroundActivityStatus::Dismissed,
+                    target_turn_id,
+                    None,
+                ))
+                .await;
+                Err(BitFunError::Cancelled(message))
+            }
+            Err(error) => {
+                self.emit_event(build_auto_memory_activity_event(
+                    session_id,
+                    SessionBackgroundActivityStatus::Failed,
+                    target_turn_id,
+                    Some(error.to_string()),
+                ))
+                .await;
+                Err(error)
+            }
+        }
+    }
+
     /// Cancel dialog turn execution
     /// Immediately set state to Idle to allow new dialog, old turn ends naturally via cancel token
     pub async fn cancel_dialog_turn(
@@ -1834,6 +2381,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        self.auto_memory_manager.cancel_session(session_id);
+        self.emit_event(build_auto_memory_activity_event(
+            session_id,
+            SessionBackgroundActivityStatus::Dismissed,
+            None,
+            None,
+        ))
+        .await;
         self.session_manager
             .delete_session(workspace_path, session_id)
             .await?;
@@ -1916,24 +2471,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.tool_pipeline.cancel_tool(tool_id, reason).await
     }
 
-    /// Execute subagent task directly
-    /// DialogTurnStarted event not needed for now
-    ///
-    /// Parameters:
-    /// - agent_type: Agent type
-    /// - task_description: Task description
-    /// - subagent_parent_info: Parent info (tool call context)
-    /// - context: Additional context
-    /// - cancel_token: Optional cancel token (for async cancellation)
-    ///
-    /// Returns SubagentResult with the final text response
-    pub async fn execute_subagent(
+    async fn execute_hidden_subagent_internal(
         &self,
-        agent_type: String,
-        task_description: String,
-        subagent_parent_info: SubagentParentInfo,
-        workspace_path: Option<String>,
-        context: Option<std::collections::HashMap<String, String>>,
+        request: HiddenSubagentExecutionRequest,
         cancel_token: Option<&CancellationToken>,
     ) -> BitFunResult<SubagentResult> {
         // Check cancel token (before creating session)
@@ -1946,25 +2486,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
-        // Create independent subagent session.
-        // Use create_subagent_session (not create_session) so that no SessionCreated
-        // event is emitted to the transport layer — subagent sessions are internal
-        // implementation details and must not appear in the UI session list.
-        let workspace_path = workspace_path.ok_or_else(|| {
-            BitFunError::Validation(
-                "workspace_path is required when creating a subagent session".to_string(),
-            )
-        })?;
-        let subagent_config = SessionConfig {
-            workspace_path: Some(workspace_path),
-            ..SessionConfig::default()
-        };
+        let HiddenSubagentExecutionRequest {
+            session_name,
+            agent_type,
+            session_config,
+            initial_messages,
+            created_by,
+            subagent_parent_info,
+            context,
+            runtime_tool_restrictions,
+        } = request;
+
         let session = self
-            .create_subagent_session(
-                format!("Subagent: {}", task_description),
+            .create_hidden_subagent_session(
+                session_name,
                 agent_type.clone(),
-                subagent_config,
-                &subagent_parent_info,
+                session_config,
+                created_by,
             )
             .await?;
 
@@ -2017,18 +2555,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: dialog_turn_id.clone(),
             turn_index: 0,
             agent_type: agent_type.clone(),
+            hidden_session: matches!(session.kind, SessionKind::Subagent),
             workspace: subagent_workspace,
-            context: context.unwrap_or_default(),
-            subagent_parent_info: Some(subagent_parent_info),
+            context,
+            subagent_parent_info: subagent_parent_info.clone(),
             // Subagents run autonomously without user interaction; always skip
             // tool confirmation to prevent them from blocking indefinitely on a
             // confirmation channel that nobody will ever respond to.
             skip_tool_confirmation: true,
+            runtime_tool_restrictions,
             workspace_services: subagent_services,
             round_preempt: self.round_preempt_source.get().cloned(),
         };
-
-        let initial_messages = vec![Message::user(task_description)];
 
         let result = self
             .execution_engine
@@ -2082,6 +2620,117 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(SubagentResult {
             text: response_text,
         })
+    }
+
+    pub async fn capture_fork_context_snapshot(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<ForkContextSnapshot> {
+        let parent_session = self
+            .session_manager
+            .get_session(parent_session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Parent session not found: {}", parent_session_id))
+            })?;
+        let context_messages = self.load_session_context_messages(&parent_session).await?;
+        ForkContextSnapshot::from_parent_session(&parent_session, context_messages)
+    }
+
+    /// Execute a hidden child agent that inherits the parent session's current
+    /// model-visible context.
+    pub async fn execute_forked_agent(
+        &self,
+        request: ForkExecutionRequest,
+        cancel_token: Option<&CancellationToken>,
+    ) -> BitFunResult<ForkExecutionResult> {
+        if request.agent_type.trim().is_empty() {
+            return Err(BitFunError::Validation(
+                "ForkExecutionRequest.agent_type is required".to_string(),
+            ));
+        }
+        if request.description.trim().is_empty() {
+            return Err(BitFunError::Validation(
+                "ForkExecutionRequest.description is required".to_string(),
+            ));
+        }
+        if request.prompt_messages.is_empty() {
+            return Err(BitFunError::Validation(
+                "ForkExecutionRequest.prompt_messages must not be empty".to_string(),
+            ));
+        }
+
+        let inherited_message_count = request.snapshot.inherited_message_count();
+        let prompt_message_count = request.prompt_messages.len();
+        let agent_type = request.agent_type.clone();
+        let session_config = request.child_session_config();
+        let initial_messages = request.composed_initial_messages();
+        let created_by = Some(format!("session-{}", request.snapshot.parent_session_id));
+        let child_result = self
+            .execute_hidden_subagent_internal(
+                HiddenSubagentExecutionRequest {
+                    session_name: format!("Fork: {}", request.description),
+                    agent_type,
+                    session_config,
+                    initial_messages,
+                    created_by,
+                    subagent_parent_info: None,
+                    context: request.context,
+                    runtime_tool_restrictions: request.runtime_tool_restrictions,
+                },
+                cancel_token,
+            )
+            .await?;
+
+        Ok(ForkExecutionResult {
+            text: child_result.text,
+            inherited_message_count,
+            prompt_message_count,
+        })
+    }
+
+    /// Execute subagent task directly
+    /// DialogTurnStarted event not needed for now
+    ///
+    /// Parameters:
+    /// - agent_type: Agent type
+    /// - task_description: Task description
+    /// - subagent_parent_info: Parent info (tool call context)
+    /// - context: Additional context
+    /// - cancel_token: Optional cancel token (for async cancellation)
+    ///
+    /// Returns SubagentResult with the final text response
+    pub async fn execute_subagent(
+        &self,
+        agent_type: String,
+        task_description: String,
+        subagent_parent_info: SubagentParentInfo,
+        workspace_path: Option<String>,
+        context: Option<HashMap<String, String>>,
+        cancel_token: Option<&CancellationToken>,
+    ) -> BitFunResult<SubagentResult> {
+        let workspace_path = workspace_path.ok_or_else(|| {
+            BitFunError::Validation(
+                "workspace_path is required when creating a subagent session".to_string(),
+            )
+        })?;
+
+        self.execute_hidden_subagent_internal(
+            HiddenSubagentExecutionRequest {
+                session_name: format!("Subagent: {}", task_description),
+                agent_type,
+                session_config: SessionConfig {
+                    workspace_path: Some(workspace_path),
+                    ..SessionConfig::default()
+                },
+                initial_messages: vec![Message::user(task_description)],
+                created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
+                subagent_parent_info: Some(subagent_parent_info),
+                context: context.unwrap_or_default(),
+                runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            },
+            cancel_token,
+        )
+        .await
     }
 
     /// Clean up subagent session resources
@@ -2297,6 +2946,23 @@ async fn is_ai_session_title_generation_enabled() -> bool {
     }
 }
 
+async fn auto_memory_runtime_config() -> crate::service::config::types::AutoMemoryConfig {
+    match crate::service::config::get_global_config_service().await {
+        Ok(service) => service
+            .get_config::<crate::service::config::types::AutoMemoryConfig>(Some("ai.auto_memory"))
+            .await
+            .unwrap_or_default(),
+        Err(_) => crate::service::config::types::AutoMemoryConfig::default(),
+    }
+}
+
+async fn auto_memory_scope_runtime_config(
+    scope: MemoryScope,
+) -> crate::service::config::types::AutoMemoryScopeConfig {
+    let config = auto_memory_runtime_config().await;
+    auto_memory_scope_config(&config, scope).clone()
+}
+
 // Global coordinator singleton
 static GLOBAL_COORDINATOR: OnceLock<Arc<ConversationCoordinator>> = OnceLock::new();
 
@@ -2305,4 +2971,50 @@ static GLOBAL_COORDINATOR: OnceLock<Arc<ConversationCoordinator>> = OnceLock::ne
 /// Returns `None` if coordinator hasn't been initialized
 pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
     GLOBAL_COORDINATOR.get().cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{decide_auto_memory_post_turn_action, AutoMemoryPostTurnAction};
+    use crate::agentic::core::SessionKind;
+
+    #[test]
+    fn auto_memory_post_turn_skips_for_subagent_sessions() {
+        assert_eq!(
+            decide_auto_memory_post_turn_action(SessionKind::Subagent, Some(false)),
+            AutoMemoryPostTurnAction::Skip
+        );
+        assert_eq!(
+            decide_auto_memory_post_turn_action(SessionKind::Subagent, Some(true)),
+            AutoMemoryPostTurnAction::Skip
+        );
+        assert_eq!(
+            decide_auto_memory_post_turn_action(SessionKind::Subagent, None),
+            AutoMemoryPostTurnAction::Skip
+        );
+    }
+
+    #[test]
+    fn auto_memory_post_turn_skips_when_main_turn_already_wrote_memory() {
+        assert_eq!(
+            decide_auto_memory_post_turn_action(SessionKind::Standard, Some(true)),
+            AutoMemoryPostTurnAction::Skip
+        );
+    }
+
+    #[test]
+    fn auto_memory_post_turn_schedules_when_main_turn_did_not_write_memory() {
+        assert_eq!(
+            decide_auto_memory_post_turn_action(SessionKind::Standard, Some(false)),
+            AutoMemoryPostTurnAction::Schedule
+        );
+    }
+
+    #[test]
+    fn auto_memory_post_turn_schedules_when_memory_write_detection_fails() {
+        assert_eq!(
+            decide_auto_memory_post_turn_action(SessionKind::Standard, None),
+            AutoMemoryPostTurnAction::Schedule
+        );
+    }
 }

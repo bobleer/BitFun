@@ -190,6 +190,7 @@ impl TransportAdapter for TauriTransportAdapter {
             AgenticEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,
+                hidden_session,
                 subagent_parent_info,
                 ..
             } => {
@@ -198,6 +199,7 @@ impl TransportAdapter for TauriTransportAdapter {
                     json!({
                         "sessionId": session_id,
                         "turnId": turn_id,
+                        "hiddenSession": hidden_session,
                         "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
@@ -368,6 +370,26 @@ impl TransportAdapter for TauriTransportAdapter {
                         "previousModelId": previous_model_id,
                         "newModelId": new_model_id,
                         "reason": reason,
+                    }),
+                )?;
+            }
+            AgenticEvent::SessionBackgroundActivityUpdated {
+                session_id,
+                activity_id,
+                kind,
+                status,
+                target_turn_id,
+                detail,
+            } => {
+                self.app_handle.emit(
+                    "agentic://session-background-activity-updated",
+                    json!({
+                        "sessionId": session_id,
+                        "activityId": activity_id,
+                        "activityKind": kind,
+                        "activityStatus": status,
+                        "targetTurnId": target_turn_id,
+                        "detail": detail,
                     }),
                 )?;
             }
