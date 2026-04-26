@@ -178,7 +178,8 @@ impl WorkspaceRuntimeService {
             || !created_directories.is_empty()
             || !migrated_entries.is_empty()
         {
-            self.persist_layout_state(&context, &migrated_entries).await?;
+            self.persist_layout_state(&context, &migrated_entries)
+                .await?;
         }
 
         self.mark_runtime_verified(&context.runtime_root);

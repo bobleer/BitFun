@@ -814,11 +814,9 @@ impl SessionManager {
             .await?
             .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
         let memory_dir = match memory_scope {
-            MemoryScope::WorkspaceProject => {
-                memory_store_dir_path_for_target(MemoryStoreTarget::WorkspaceProject(
-                    workspace_root.as_path(),
-                ))
-            }
+            MemoryScope::WorkspaceProject => memory_store_dir_path_for_target(
+                MemoryStoreTarget::WorkspaceProject(workspace_root.as_path()),
+            ),
             MemoryScope::GlobalAgenticOs => {
                 memory_store_dir_path_for_target(MemoryStoreTarget::GlobalAgenticOs)
             }
@@ -2714,11 +2712,7 @@ mod tests {
             .expect("turn should save");
 
         let detected = manager
-            .turn_wrote_memory_for_scope(
-                &session_id,
-                &turn_id,
-                MemoryScope::WorkspaceProject,
-            )
+            .turn_wrote_memory_for_scope(&session_id, &turn_id, MemoryScope::WorkspaceProject)
             .await
             .expect("memory write detection should succeed");
 
@@ -2763,11 +2757,7 @@ mod tests {
             .expect("turn should save");
 
         let detected = manager
-            .turn_wrote_memory_for_scope(
-                &session_id,
-                &turn_id,
-                MemoryScope::WorkspaceProject,
-            )
+            .turn_wrote_memory_for_scope(&session_id, &turn_id, MemoryScope::WorkspaceProject)
             .await
             .expect("memory write detection should succeed");
 

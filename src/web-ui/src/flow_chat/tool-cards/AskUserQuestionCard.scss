@@ -5,6 +5,7 @@
  */
 
 @use './_tool-card-common.scss';
+@use './BaseToolCard.scss';
 
 /* ========== Card wrapper ========== */
 .ask-user-question-card {
@@ -475,58 +476,112 @@
   }
 }
 
-/* ========== Completed state - collapsed summary ========== */
-.completed-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+/* ========== Completed state: compact header row (match Terminal shell card) ========== */
+
+.ask-user-completed-root {
+  display: block;
+  min-width: 0;
+}
+
+.ask-user-question-completed-wrap {
+  min-width: 0;
+}
+
+.ask-user-question-tool-card {
+  .tool-identifier-icon.ask-user-icon {
+    color: var(--color-text-secondary);
+  }
+}
+
+.base-tool-card-wrapper.ask-user-question-tool-card .base-tool-card-header {
   cursor: pointer;
-  padding: 10px 14px;
-  transition: all 0.15s ease;
+}
+
+/* Collapsed: same transparent row as terminal-tool-card */
+.base-tool-card-wrapper.ask-user-question-tool-card:not(:has(> .base-tool-card-expanded)):not(:has(> .base-tool-card-error)) {
+  margin: 0;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  overflow: visible;
+
+  &:hover,
+  &:active {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .base-tool-card-header {
+    --tool-card-header-pad-y: 0px;
+    --tool-card-header-pad-x: 0px;
+
+    gap: 8px;
+    padding: 0 8px 0 0;
+    line-height: 1.65;
+    overflow: visible;
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+
+  .tool-card-icon-slot {
+    align-self: center;
+    padding-right: 0;
+    margin-right: 0;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  .tool-card-icon-marks {
+    width: auto;
+    height: auto;
+  }
+
+  .tool-card-icon.tool-identifier-icon.tool-card-icon-main svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .tool-card-action,
+  .tool-card-content {
+    font-size: var(--flowchat-font-size-base);
+    line-height: 1.65;
+    color: var(--color-text-muted);
+  }
+
+  .ask-user-header-status {
+    color: var(--color-text-muted);
+  }
 
   &:hover {
-    background: var(--element-bg-subtle);
+    .tool-card-action,
+    .tool-card-content,
+    .ask-user-header-status {
+      color: var(--color-text-primary);
+    }
   }
 }
 
-.summary-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-
-  svg {
-    flex-shrink: 0;
-    color: var(--color-text-muted);
-    width: 14px;
-    height: 14px;
-  }
-}
-
-.summary-questions-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-}
-
-.summary-arrow {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-
-.summary-answer {
+.ask-user-answers-compact-line {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-primary);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.ask-user-header-status {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
   white-space: nowrap;
+  padding-left: 8px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-base);
+  flex-shrink: 0;
 }
 
 /* ========== Expanded state ========== */
@@ -552,6 +607,10 @@
   font-size: 11px;
   font-weight: 500;
   margin: 0 14px 12px;
+
+  .ask-user-completed-root & {
+    margin: 8px 0 0;
+  }
   background: var(--color-warning-bg);
   color: var(--color-warning);
   border: 1px solid var(--color-warning-border);

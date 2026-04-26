@@ -196,6 +196,9 @@ mod tests {
         );
 
         assert!(prompt.contains("## Special workspace overview files"));
+        assert!(prompt.contains("<name>assistant_identity</name>"));
+        assert!(prompt.contains("<name>collaboration</name>"));
+        assert!(prompt.contains("<name>vision</name>"));
         assert!(!prompt.contains("<name>project</name>"));
         assert!(!prompt.contains("## When to access memories"));
     }

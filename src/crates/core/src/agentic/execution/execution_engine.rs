@@ -279,12 +279,9 @@ impl ExecutionEngine {
             .as_ref()
             .map(|workspace| workspace.root_path_string())?;
 
-        let base = PromptBuilderContext::new(
-            workspace_path.clone(),
-            Some(model_name.to_string()),
-        )
-        .with_memory_scope(memory_scope)
-        .with_supports_image_understanding(supports_image_understanding);
+        let base = PromptBuilderContext::new(workspace_path.clone(), Some(model_name.to_string()))
+            .with_memory_scope(memory_scope)
+            .with_supports_image_understanding(supports_image_understanding);
 
         let Some(workspace) = context.workspace.as_ref() else {
             return Some(base);

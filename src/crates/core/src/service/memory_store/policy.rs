@@ -105,6 +105,42 @@ const GLOBAL_REFERENCE_MEMORY_TYPE: &str = r#"<type>
     </examples>
 </type>"#;
 
+const ASSISTANT_IDENTITY_MEMORY_TYPE: &str = r#"<type>
+    <name>assistant_identity</name>
+    <description>Durable product-level guidance about what the top-level Agentic OS assistant is supposed to be. Use this for explicit user direction about role, relationship model, personality boundaries, and capability expectations.</description>
+    <when_to_save>When the user explicitly defines or corrects the top-level assistant's identity, such as asking it to be an executive-companion style work partner instead of a dispatcher.</when_to_save>
+    <how_to_use>Use these memories to keep the assistant's system-level posture consistent across conversations without inventing unsupported shared history.</how_to_use>
+    <body_structure>Lead with the identity rule, then a **Why:** line and a **How to apply:** line.</body_structure>
+    <examples>
+    user: don't position the top assistant as a dispatcher; it should feel like a top executive assistant and long-term work partner
+    assistant: [saves assistant_identity memory: top-level assistant should act as an executive companion, not a dispatcher. Why: user wants professional handling plus old-friend continuity. How to apply: describe delegation as arranging work behind the scenes]
+    </examples>
+</type>"#;
+
+const COLLABORATION_MEMORY_TYPE: &str = r#"<type>
+    <name>collaboration</name>
+    <description>Stable preferences about how the user wants to collaborate: level of detail, planning rhythm, decision style, emotional tone, and how proactive the assistant should be.</description>
+    <when_to_save>When the user gives durable guidance about how they want you to work with them, especially if it affects many future conversations.</when_to_save>
+    <how_to_use>Use these memories to reduce the user's cognitive load and match their preferred working rhythm.</how_to_use>
+    <body_structure>Lead with the collaboration preference, then a **Why:** line and a **How to apply:** line.</body_structure>
+    <examples>
+    user: when we're designing product behavior, give me the strategy first and only then implementation details
+    assistant: [saves collaboration memory: for product behavior design, start with strategy before implementation details]
+    </examples>
+</type>"#;
+
+const VISION_MEMORY_TYPE: &str = r#"<type>
+    <name>vision</name>
+    <description>Durable cross-workspace product or operating-system vision that should shape future recommendations. Use this for direction that is broader than a single task and not derivable from current files.</description>
+    <when_to_save>When the user states a long-term product direction, positioning decision, or strategic principle that should influence future Agentic OS work.</when_to_save>
+    <how_to_use>Use these memories to understand why a requested change matters and to keep proposals aligned with the user's larger product direction.</how_to_use>
+    <body_structure>Lead with the vision statement, then a **Why:** line and a **How to apply:** line.</body_structure>
+    <examples>
+    user: Agentic OS should feel like a trusted operating partner, not just a tool panel
+    assistant: [saves vision memory: Agentic OS should be experienced as a trusted operating partner. Why: product direction favors continuity and proactive organization. How to apply: prefer designs that combine capability, context, and follow-through]
+    </examples>
+</type>"#;
+
 pub(crate) fn build_workspace_memory_policy_sections(
     index_file_name: &str,
     profile: SharedMemoryPolicyProfile,
@@ -167,7 +203,7 @@ type: {{{{user, feedback, project, reference}}}}
         user_memory_type = USER_MEMORY_TYPE,
         feedback_memory_type = FEEDBACK_MEMORY_TYPE,
         project_memory_type = PROJECT_MEMORY_TYPE,
-        reference_memory_type = GLOBAL_REFERENCE_MEMORY_TYPE,
+        reference_memory_type = REFERENCE_MEMORY_TYPE,
     )
 }
 
@@ -193,6 +229,9 @@ There are several discrete types of memory that you can store in your memory sys
 <types>
 {user_memory_type}
 {feedback_memory_type}
+{assistant_identity_memory_type}
+{collaboration_memory_type}
+{vision_memory_type}
 {reference_memory_type}
 </types>
 
@@ -207,10 +246,11 @@ Use those files for durable notes about what a workspace is for, reliable aliase
 - Code patterns, conventions, architecture, file paths, or project structure.
 - Git history, recent changes, or who-changed-what.
 - Ephemeral task details: in-progress work, temporary state, current conversation context.
+- Unsupported intimacy or inferred personal traits. Record explicit collaboration expectations, not guesses about the user.
 
 ## How to save memories
 
-### For ordinary memories (`user`, `feedback`, `reference`):
+### For ordinary memories (`user`, `feedback`, `assistant_identity`, `collaboration`, `vision`, `reference`):
 
 **Step 1** — write the memory to its own file using this frontmatter format:
 
@@ -218,10 +258,10 @@ Use those files for durable notes about what a workspace is for, reliable aliase
 ---
 name: {{{{memory name}}}}
 description: {{{{one-line description — used to decide relevance in future conversations, so be specific}}}}
-type: {{{{user, feedback, reference}}}}
+type: {{{{user, feedback, assistant_identity, collaboration, vision, reference}}}}
 ---
 
-{{{{memory content — for feedback types, structure as: rule, then **Why:** and **How to apply:** lines}}}}
+{{{{memory content — for feedback/assistant_identity/collaboration/vision types, structure as: rule or fact, then **Why:** and **How to apply:** lines}}}}
 ```
 
 **Step 2** — add a pointer to that file in `{index_file_name}`.
@@ -241,6 +281,9 @@ type: {{{{user, feedback, reference}}}}
 "#,
         user_memory_type = USER_MEMORY_TYPE,
         feedback_memory_type = FEEDBACK_MEMORY_TYPE,
+        assistant_identity_memory_type = ASSISTANT_IDENTITY_MEMORY_TYPE,
+        collaboration_memory_type = COLLABORATION_MEMORY_TYPE,
+        vision_memory_type = VISION_MEMORY_TYPE,
         reference_memory_type = REFERENCE_MEMORY_TYPE,
     )
 }

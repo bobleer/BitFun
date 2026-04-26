@@ -413,7 +413,10 @@ impl BrowserLauncher {
                 BrowserKind::Chromium => "Chromium",
                 BrowserKind::Unknown(name) => name.as_str(),
             };
-            let script = format!("tell application \"{}\" to quit", app_name.replace('"', "\\\""));
+            let script = format!(
+                "tell application \"{}\" to quit",
+                app_name.replace('"', "\\\"")
+            );
             let output = silent_command("osascript")
                 .args(["-e", &script])
                 .output()
@@ -422,7 +425,11 @@ impl BrowserLauncher {
                 return Ok(());
             }
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BitFunError::tool(format!("Failed to quit {}: {}", kind, stderr.trim())));
+            return Err(BitFunError::tool(format!(
+                "Failed to quit {}: {}",
+                kind,
+                stderr.trim()
+            )));
         }
 
         #[cfg(target_os = "windows")]
@@ -443,7 +450,9 @@ impl BrowserLauncher {
                 let output = silent_command("taskkill")
                     .args(["/IM", process_name, "/F"])
                     .output()
-                    .map_err(|e| BitFunError::tool(format!("Failed to terminate {}: {}", process_name, e)))?;
+                    .map_err(|e| {
+                        BitFunError::tool(format!("Failed to terminate {}: {}", process_name, e))
+                    })?;
                 let stdout = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
                 let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
                 if output.status.success()

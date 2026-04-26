@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useCallback, useMemo, useLayoutEffect, useRef } from 'react';
-import { Loader2, AlertCircle, Send, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, AlertCircle, Send, MessageCircleQuestion } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { Button } from '@/component-library';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import './AskUserQuestionCard.scss';
 
 const log = createLogger('AskUserQuestionCard');
@@ -361,6 +362,27 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     }).join(' | ');
   };
 
+  const handleCompletedCardClick = useCallback(() => {
+    applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
+  }, [applyExpandedState, isExpanded]);
+
+  const renderCompletedHeader = () => (
+    <ToolCardHeader
+      icon={<MessageCircleQuestion size={16} />}
+      iconClassName="ask-user-icon"
+      action={t('toolCards.askUser.headerAction')}
+      content={<span className="ask-user-answers-compact-line">{getAnswersSummary()}</span>}
+      extra={(
+        <span
+          className="ask-user-header-status"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {getStatusText()}
+        </span>
+      )}
+    />
+  );
+
   const renderResult = () => {
     if (!toolResult?.result) return null;
     
@@ -407,7 +429,11 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     <div
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
-      className={`ask-user-question-card status-${status}`}
+      className={
+        showCompletedSummary
+          ? 'ask-user-completed-root'
+          : `ask-user-question-card status-${status}`
+      }
     >
       {!showCompletedSummary ? (
         <>
@@ -450,29 +476,22 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
         </>
       ) : (
         <>
-          <div 
-            className="completed-summary"
-            onClick={() => applyExpandedState(isExpanded, !isExpanded, setIsExpanded)}
-          >
-            <div className="summary-content">
-              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              <span className="summary-questions-count">{t('toolCards.askUser.questionsAnswered', { count: questions.length })}</span>
-              <span className="summary-arrow">→</span>
-              <span className="summary-answer">{getAnswersSummary()}</span>
-            </div>
-            <div className="tool-status">
-              {getStatusIcon()}
-              <span className="status-text">{getStatusText()}</span>
-            </div>
+          <div className="ask-user-question-completed-wrap">
+            <BaseToolCard
+              status={status}
+              isExpanded={isExpanded}
+              onClick={handleCompletedCardClick}
+              className="ask-user-question-tool-card"
+              header={renderCompletedHeader()}
+              expandedContent={isExpanded ? (
+                <div className="questions-container expanded">
+                  {questions.map((q, idx) => renderQuestion(q, idx))}
+                </div>
+              ) : null}
+              headerExpandAffordance
+            />
+            {renderResult()}
           </div>
-
-          {isExpanded && (
-            <div className="questions-container expanded">
-              {questions.map((q, idx) => renderQuestion(q, idx))}
-            </div>
-          )}
-
-          {renderResult()}
         </>
       )}
     </div>

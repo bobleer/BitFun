@@ -622,15 +622,13 @@ impl Tool for DesignTokensTool {
                 )])
             }
             "update" => {
-                let mut edited: DesignTokenProposal = serde_json::from_value(
-                    input
-                        .get("proposal")
-                        .cloned()
-                        .ok_or_else(|| BitFunError::tool("DesignTokens.update requires proposal"))?,
-                )
-                .map_err(|e| {
-                    BitFunError::tool(format!("DesignTokens.update invalid proposal: {}", e))
-                })?;
+                let mut edited: DesignTokenProposal =
+                    serde_json::from_value(input.get("proposal").cloned().ok_or_else(|| {
+                        BitFunError::tool("DesignTokens.update requires proposal")
+                    })?)
+                    .map_err(|e| {
+                        BitFunError::tool(format!("DesignTokens.update invalid proposal: {}", e))
+                    })?;
                 let mut doc = Self::load_or_default(&target_path).await?;
                 let Some(existing_index) = doc
                     .proposals

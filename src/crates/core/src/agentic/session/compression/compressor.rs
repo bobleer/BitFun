@@ -13,6 +13,7 @@ use crate::infrastructure::ai::{get_global_ai_client_factory, AIClient};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use anyhow;
+use bitfun_ai_adapters::types::ReasoningMode;
 use log::{debug, trace, warn};
 use std::sync::Arc;
 
@@ -76,6 +77,36 @@ pub struct ContextCompressor {
 impl ContextCompressor {
     pub fn new(config: CompressionConfig) -> Self {
         Self { config }
+    }
+
+    fn summary_client_for_compression(ai_client: &AIClient) -> AIClient {
+        let mut summary_client = ai_client.clone();
+
+        if summary_client
+            .config
+            .format
+            .trim()
+            .eq_ignore_ascii_case("anthropic")
+        {
+            summary_client.config.reasoning_mode = ReasoningMode::Disabled;
+            summary_client.config.reasoning_effort = None;
+            summary_client.config.thinking_budget_tokens = None;
+
+            if let Some(serde_json::Value::Object(extra_body)) =
+                summary_client.config.custom_request_body.as_mut()
+            {
+                extra_body.remove("thinking");
+                extra_body.remove("output_config");
+            }
+        }
+
+        summary_client
+    }
+
+    fn strip_reasoning_for_summary(mut ai_msg: AIMessage) -> AIMessage {
+        ai_msg.reasoning_content = None;
+        ai_msg.thinking_signature = None;
+        ai_msg
     }
 
     fn get_turn_index_to_keep(&self, turns_tokens: &[usize], token_limit: usize) -> usize {
@@ -574,17 +605,19 @@ Be thorough and precise. Do not lose important technical details from either the
     ) -> BitFunResult<String> {
         let mut summary_messages = vec![AIMessage::from(system_message_for_summary)];
         summary_messages.extend(messages.iter().map(|m| {
-            let mut ai_msg = AIMessage::from(m);
-            ai_msg.reasoning_content = None;
-            ai_msg
+            let ai_msg = AIMessage::from(m);
+            Self::strip_reasoning_for_summary(ai_msg)
         }));
         summary_messages.push(AIMessage::user(self.get_compact_prompt()));
 
+        let summary_client = Self::summary_client_for_compression(ai_client.as_ref());
         let mut last_error = None;
         let base_wait_time_ms = 500;
 
         for attempt in 0..max_tries {
-            let result = ai_client.send_message(summary_messages.clone(), None).await;
+            let result = summary_client
+                .send_message(summary_messages.clone(), None)
+                .await;
 
             match result {
                 Ok(response) => {
@@ -731,6 +764,10 @@ mod tests {
     use crate::agentic::core::{
         render_system_reminder, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
     };
+    use bitfun_ai_adapters::{
+        types::{AIConfig, ReasoningMode},
+        AIClient,
+    };
 
     fn make_turn(messages: Vec<Message>) -> TurnWithTokens {
         let mut messages_with_tokens = messages;
@@ -759,6 +796,34 @@ mod tests {
                 }],
             ),
         ])
+    }
+
+    fn anthropic_test_config() -> AIConfig {
+        AIConfig {
+            name: "test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200_000,
+            max_tokens: Some(4096),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("medium".to_string()),
+            thinking_budget_tokens: Some(1024),
+            custom_request_body: Some(serde_json::json!({
+                "thinking": { "type": "enabled" },
+                "output_config": { "effort": "medium" },
+                "metadata": { "purpose": "test" }
+            })),
+            custom_request_body_mode: None,
+        }
     }
 
     #[tokio::test]
@@ -797,6 +862,46 @@ mod tests {
         };
         assert!(summary_text.contains("Latest task list snapshot at the compression boundary"));
         assert!(summary_text.contains("Update compressor"));
+    }
+
+    #[test]
+    fn summary_client_disables_anthropic_reasoning() {
+        let client = AIClient::new(anthropic_test_config());
+        let summary_client = ContextCompressor::summary_client_for_compression(&client);
+
+        assert_eq!(
+            summary_client.config.reasoning_mode,
+            ReasoningMode::Disabled
+        );
+        assert_eq!(summary_client.config.reasoning_effort, None);
+        assert_eq!(summary_client.config.thinking_budget_tokens, None);
+
+        let extra_body = summary_client
+            .config
+            .custom_request_body
+            .and_then(|value| value.as_object().cloned())
+            .expect("extra body object");
+        assert!(!extra_body.contains_key("thinking"));
+        assert!(!extra_body.contains_key("output_config"));
+        assert!(extra_body.contains_key("metadata"));
+    }
+
+    #[test]
+    fn summary_messages_strip_reasoning_and_signature_together() {
+        let message = Message::assistant_with_reasoning(
+            Some("internal thinking".to_string()),
+            "final answer".to_string(),
+            vec![],
+        )
+        .with_thinking_signature(Some("sig".to_string()));
+
+        let stripped = ContextCompressor::strip_reasoning_for_summary(
+            crate::util::types::Message::from(message),
+        );
+
+        assert_eq!(stripped.content.as_deref(), Some("final answer"));
+        assert_eq!(stripped.reasoning_content, None);
+        assert_eq!(stripped.thinking_signature, None);
     }
 
     #[tokio::test]

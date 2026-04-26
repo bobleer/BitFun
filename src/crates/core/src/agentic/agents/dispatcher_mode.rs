@@ -1,4 +1,4 @@
-//! Dispatcher Mode — BitFun Agentic OS scheduling center
+//! Dispatcher Mode — Agentic OS top-level executive companion
 use super::{Agent, RequestContextPolicy};
 use crate::service::memory_store::MemoryScope;
 use async_trait::async_trait;
@@ -17,7 +17,7 @@ impl DispatcherMode {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                // Core dispatch tool
+                // Delegation tool for specialized agent work
                 "AgentDispatch".to_string(),
                 // Communicate with existing sessions
                 "SessionMessage".to_string(),
@@ -35,7 +35,7 @@ impl DispatcherMode {
                 "TodoWrite".to_string(),
                 // Clarification
                 "AskUserQuestion".to_string(),
-                // Forked auto-memory agent use these tools to update memory 
+                // Forked auto-memory agents use these tools to update memory
                 "Write".to_string(),
                 "Edit".to_string(),
                 "Delete".to_string(),
@@ -55,11 +55,11 @@ impl Agent for DispatcherMode {
     }
 
     fn name(&self) -> &str {
-        "Dispatcher"
+        "Executive Companion"
     }
 
     fn description(&self) -> &str {
-        "BitFun Agentic OS Dispatcher: understands intent, selects workspaces, and creates the right agent sessions to execute tasks"
+        "Sparo Agentic OS top-level executive companion: helps the user think, decide, organize, delegate, track, and close the loop with professional judgment and long-term continuity"
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -73,6 +73,7 @@ impl Agent for DispatcherMode {
     fn request_context_policy(&self) -> RequestContextPolicy {
         RequestContextPolicy::empty()
             .with_workspace_instructions()
+            .with_executive_companion_context()
             .with_recent_workspaces()
             .with_memory_scope(MemoryScope::GlobalAgenticOs)
             .with_global_workspace_overviews()

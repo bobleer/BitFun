@@ -13,19 +13,22 @@ const WORKSPACE_OVERVIEW_MAX_TOTAL_CHARS: usize = 10_000;
 
 pub(super) async fn ensure_global_memory_overview_files(memory_dir: &Path) -> BitFunResult<()> {
     let overview_dir = memory_dir.join(WORKSPACES_OVERVIEW_DIR);
-    tokio::fs::create_dir_all(&overview_dir).await.map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to create global workspace overview directory {}: {}",
-            overview_dir.display(),
-            e
-        ))
-    })?;
+    tokio::fs::create_dir_all(&overview_dir)
+        .await
+        .map_err(|e| {
+            BitFunError::service(format!(
+                "Failed to create global workspace overview directory {}: {}",
+                overview_dir.display(),
+                e
+            ))
+        })?;
 
     let Some(workspace_service) = get_global_workspace_service() else {
         return Ok(());
     };
 
-    let mut known_workspaces = collect_dispatcher_overview_workspaces(workspace_service.as_ref()).await;
+    let mut known_workspaces =
+        collect_dispatcher_overview_workspaces(workspace_service.as_ref()).await;
 
     known_workspaces.sort_by(|left, right| {
         left.name
@@ -83,7 +86,8 @@ pub(crate) async fn build_global_workspace_overviews_context(
         );
         let entry_len = entry.chars().count();
 
-        if !rendered_entries.is_empty() && total_chars + entry_len > WORKSPACE_OVERVIEW_MAX_TOTAL_CHARS
+        if !rendered_entries.is_empty()
+            && total_chars + entry_len > WORKSPACE_OVERVIEW_MAX_TOTAL_CHARS
         {
             break;
         }
@@ -150,7 +154,9 @@ async fn build_workspace_overview_path_map(overview_dir: &Path) -> HashMap<Strin
     map
 }
 
-async fn ordered_workspace_overview_paths(overview_dir: &Path) -> BitFunResult<Vec<std::path::PathBuf>> {
+async fn ordered_workspace_overview_paths(
+    overview_dir: &Path,
+) -> BitFunResult<Vec<std::path::PathBuf>> {
     let mut ordered = Vec::new();
     let mut seen = HashSet::new();
 
@@ -277,7 +283,11 @@ fn workspace_overview_slug(workspace: &WorkspaceInfo) -> String {
         .and_then(|name| name.to_str())
         .map(str::trim)
         .unwrap_or_default();
-    let seed = if preferred.is_empty() { fallback } else { preferred };
+    let seed = if preferred.is_empty() {
+        fallback
+    } else {
+        preferred
+    };
 
     slugify_workspace_component(seed)
 }
@@ -351,7 +361,10 @@ mod tests {
 
     #[test]
     fn workspace_slug_is_human_readable() {
-        assert_eq!(slugify_workspace_component("BitFun Desktop"), "bitfun-desktop");
+        assert_eq!(
+            slugify_workspace_component("BitFun Desktop"),
+            "bitfun-desktop"
+        );
         assert_eq!(slugify_workspace_component("  api_core  "), "api-core");
     }
 
