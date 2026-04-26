@@ -792,6 +792,7 @@ impl FileTreeService {
             && file_name.starts_with('.')
             && file_name != ".gitignore"
             && file_name != ".bitfun"
+            && file_name != ".sparo_os"
             && file_name != ".bitfun_agentic_os"
         {
             return true;

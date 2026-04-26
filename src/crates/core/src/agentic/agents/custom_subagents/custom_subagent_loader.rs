@@ -13,7 +13,7 @@ pub struct SubagentDirEntry {
     pub kind: CustomSubagentKind,
 }
 
-/// Project subagent directory names (relative to workspace root, each item is in [".bitfun_agentic_os", "agents"] format)
+/// Project subagent directory names (relative to workspace root, each item is in [".sparo_os", "agents"] format)
 const PROJECT_AGENT_SUBDIRS: &[(&str, &str)] = &[
     (APP_HIDDEN_DIR_NAME, "agents"),
     (".claude", "agents"),

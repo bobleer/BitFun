@@ -105,9 +105,12 @@ pub async fn set_user_mode_skill_state(
 }
 
 pub fn project_mode_skills_path_for_remote(remote_root: &str) -> String {
+    use crate::infrastructure::APP_HIDDEN_DIR_NAME;
+
     format!(
-        "{}/.bitfun_agentic_os/config/{}",
+        "{}/{}/config/{}",
         remote_root.trim_end_matches('/'),
+        APP_HIDDEN_DIR_NAME,
         PROJECT_MODE_SKILLS_FILE_NAME
     )
 }

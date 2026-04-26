@@ -1,30 +1,30 @@
-# AGENTS.md
+# Agents.md
 
 ## Project Overview
 
-BitFun is an Agentic OS desktop application for building and running intelligent apps. The main product surface is the Tauri desktop app backed by Rust services and a React/TypeScript Web UI.
+Sparo OS is an Agentic OS desktop application for building and running intelligent apps. The primary product surface is the Tauri desktop app backed by Rust services and a React/TypeScript Web UI.
 
 Focus routine development on:
 
-- `src/apps/desktop` - Tauri 2 desktop shell, commands, capabilities, desktop-only integration.
+- `src/apps/desktop` - Tauri 2 desktop shell, commands, capabilities, and desktop-only integration.
 - `src/web-ui` - React 18 + TypeScript UI used by the desktop app.
 - `src/crates/core` - platform-agnostic business logic, agent runtime, services, storage, paths, and tools.
 - `src/crates/events` - platform-agnostic event contracts.
 - `src/crates/transport` - adapters between core/events and app surfaces.
 - `src/crates/api-layer` - shared request/response handlers used by app commands.
 
-Do not describe or design features around CLI/server "modes" unless the user explicitly asks for those targets. They may exist in the workspace, but desktop + Web UI is the default product path.
+Do not describe or design features around CLI/server targets unless the user explicitly asks for them. They may exist in the workspace, but desktop + Web UI is the default product path.
 
 ## Current Architecture
 
-- `src/crates/core/src/agentic` - agents, prompts, sessions, dialog turns, model rounds, tool execution.
+- `src/crates/core/src/agentic` - agents, prompts, sessions, dialog turns, model rounds, and tool execution.
 - `src/crates/core/src/service` - workspace, config, filesystem, terminal, git, and related services.
-- `src/crates/core/src/infrastructure` - AI adapters, app paths, logging, storage, debug ingest, events.
+- `src/crates/core/src/infrastructure` - AI adapters, app paths, logging, storage, debug ingest, and events.
 - `src/web-ui/src/app` - application shell and desktop panels.
 - `src/web-ui/src/flow_chat` - chat UI, tool cards, streaming/tool event presentation.
-- `src/web-ui/src/tools` - feature tools such as editor, terminal, git, mermaid, design canvas.
+- `src/web-ui/src/tools` - feature tools such as editor, terminal, git, mermaid, and design canvas.
 - `src/web-ui/src/shared` - shared frontend services and utilities.
-- `src/web-ui/src/infrastructure` - theme, i18n, config, API adapters, state wiring.
+- `src/web-ui/src/infrastructure` - theme, i18n, config, API adapters, and state wiring.
 - `src/web-ui/src/component-library` - reusable UI components.
 - `src/web-ui/src/locales` - translations.
 
@@ -33,16 +33,17 @@ Do not describe or design features around CLI/server "modes" unless the user exp
 Use `pnpm` from the repository root.
 
 ```bash
-pnpm run desktop:dev        # run the desktop app in development
-pnpm run dev:web            # run only the Web UI with Vite
-pnpm run type-check:web     # TypeScript check
-pnpm run lint:web           # frontend lint
-pnpm run build:web          # type-check + Web UI build + Monaco asset verification
-pnpm run desktop:build      # desktop production build
-pnpm run e2e:test           # Playwright E2E suite in debug app mode
+pnpm install               # install dependencies
+pnpm run desktop:dev       # run the desktop app in development
+pnpm run dev:web           # run only the Web UI with Vite
+pnpm run type-check:web    # TypeScript check
+pnpm run lint:web          # frontend lint
+pnpm run build:web         # type-check + Web UI build + Monaco asset verification
+pnpm run desktop:build     # desktop production build
+pnpm run e2e:test          # Playwright E2E suite in debug app mode
 ```
 
-For Rust-only checks, run the narrowest useful `cargo check` / `cargo test` command for the crate touched.
+For Rust-only changes, run the narrowest useful `cargo check` or `cargo test` command for the crate touched.
 
 ## Critical Rules
 
@@ -96,34 +97,30 @@ Backend logging:
 - Use `log::{trace, debug, info, warn, error}` macros.
 - Include useful context such as `session_id`, `request_id`, `workspace_path`, and operation names when available.
 
+### Paths And Persistence
+
+- App config directory name: `sparo_os`.
+- Project hidden directory name: `.sparo_os`.
+- Project-local config lives under `<workspace>/.sparo_os/config/`.
+- Default debug log lives at `<workspace>/.sparo_os/debug.log`.
+- Runtime project data typically lives under `~/.sparo_os/projects/<workspace-slug>/`.
+- Project sessions live under `~/.sparo_os/projects/<workspace-slug>/sessions/`.
+
 Desktop runtime logs:
 
-- Default root is the BitFun config log directory:
-  - Windows: `%APPDATA%\bitfun_agentic_os\logs`
-  - macOS: `~/Library/Application Support/bitfun_agentic_os/logs`
-  - Linux: `~/.config/bitfun_agentic_os/logs`
-- Each app launch creates a timestamped session directory: `<logs>/<YYYYMMDDTHHMMSS>/`.
+- Default root is the Sparo OS config log directory:
+  - Windows: `%APPDATA%\sparo_os\logs`
+  - macOS: `~/Library/Application Support/sparo_os/logs`
+  - Linux: `~/.config/sparo_os/logs`
+- Each app launch creates a timestamped session directory under the log root.
 - Session files are `app.log`, `ai.log`, and `webview.log`.
 - `BITFUN_LOG_DIR` overrides the log root. `BITFUN_E2E_LOG_DIR` is used for E2E runs.
-- Embedded webdriver debug mode writes logs under the temp `bitfun-e2e-logs` directory and may use stdout-only targets.
 
 Debug instrumentation logs:
 
 - The built-in debug ingest server defaults to `http://127.0.0.1:7242`.
-- The default workspace debug log path is `.bitfun_agentic_os/debug.log`.
-- The current JavaScript/TypeScript instrumentation template posts to:
-  `http://127.0.0.1:{PORT}/ingest/{SESSION_ID}`.
+- The default workspace debug log path is `.sparo_os/debug.log`.
 - `scripts/debug-log-server.mjs` is only an ad hoc standalone helper. Its defaults are port `7469` and repository-root `debug-agent.log`; do not confuse it with the built-in ingest server.
-
-### Paths And Persistence
-
-- App config directory name: `bitfun_agentic_os`.
-- Project hidden directory name: `.bitfun_agentic_os`.
-- Project-local config lives under `<workspace>/.bitfun_agentic_os/config/`.
-- Default debug log lives at `<workspace>/.bitfun_agentic_os/debug.log`.
-- Runtime project data lives under the BitFun home project area, typically `~/.bitfun/projects/<workspace-slug>/`.
-- Project sessions live under `~/.bitfun/projects/<workspace-slug>/sessions/`.
-- Do not introduce new `.bitfun/` paths unless handling legacy migration or explicitly matching existing compatibility code.
 
 ### Frontend Reuse
 
@@ -192,5 +189,6 @@ fetch('http://127.0.0.1:7242/ingest/session-id', {
 Read the resulting workspace log from:
 
 ```text
-<workspace>/.bitfun_agentic_os/debug.log
+<workspace>/.sparo_os/debug.log
 ```
+
