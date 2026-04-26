@@ -10,6 +10,7 @@ use bitfun_core::service::remote_ssh::{
     init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
 use bitfun_core::service::{announcement, config, filesystem, mcp, token_usage, workspace};
+use bitfun_core::infrastructure::APP_CONFIG_DIR_NAME;
 use bitfun_core::util::errors::*;
 
 use serde::{Deserialize, Serialize};
@@ -213,7 +214,7 @@ impl AppState {
         // Initialize SSH Remote services synchronously so they're ready before app starts
         let ssh_data_dir = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("bitfun_agentic_os")
+            .join(APP_CONFIG_DIR_NAME)
             .join("ssh");
         let ssh_manager = Arc::new(RwLock::new(None));
         let ssh_manager_clone = ssh_manager.clone();

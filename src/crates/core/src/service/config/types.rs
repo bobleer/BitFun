@@ -652,7 +652,7 @@ impl Default for ModeConfigView {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DebugModeConfig {
-    /// Custom log path (relative to the workspace; default: `.bitfun_agentic_os/debug.log`).
+    /// Custom log path (relative to the workspace; default: `.sparo_os/debug.log`).
     pub log_path: String,
 
     /// Ingest server port.
@@ -668,7 +668,7 @@ pub struct DebugModeConfig {
 impl Default for DebugModeConfig {
     fn default() -> Self {
         Self {
-            log_path: ".bitfun_agentic_os/debug.log".to_string(),
+            log_path: ".sparo_os/debug.log".to_string(),
             ingest_port: 7242,
             enabled_languages: Vec::new(),
             language_templates: Self::default_language_templates(),

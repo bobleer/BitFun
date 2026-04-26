@@ -273,7 +273,7 @@ export interface LanguageDebugTemplate {
 }
 
 export const DEFAULT_DEBUG_MODE_CONFIG: DebugModeConfig = {
-  log_path: '.bitfun_agentic_os/debug.log',
+  log_path: '.sparo_os/debug.log',
   ingest_port: 7242,
   enabled_languages: [],
   language_templates: {}

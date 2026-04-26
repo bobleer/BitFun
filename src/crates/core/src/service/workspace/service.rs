@@ -167,6 +167,9 @@ impl WorkspaceService {
                     return;
                 }
 
+                self.path_manager
+                    .migrate_legacy_project_hidden_dir(&workspace.root_path);
+
                 self.runtime_service
                     .ensure_local_workspace_runtime(&workspace.root_path)
                     .await

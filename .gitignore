@@ -62,6 +62,7 @@ tests/e2e/reports/
 # BitFun sandbox data - auto managed
 .bitfun/
 .bitfun_agentic_os/
+.sparo_os/
 .cursor
 
 ASSETS_LICENSES.md

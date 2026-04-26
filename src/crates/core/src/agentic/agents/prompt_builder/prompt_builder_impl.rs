@@ -439,7 +439,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
             let agent_memory = if self.context.remote_execution.is_some()
                 && matches!(self.context.memory_scope, MemoryScope::WorkspaceProject)
             {
-                "# Auto memory\nPersistent memory under `.bitfun_agentic_os/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
+                "# Auto memory\nPersistent memory under `.sparo_os/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
                     .to_string()
             } else {
                 match build_memory_prompt_for_target(self.current_memory_target()).await {
