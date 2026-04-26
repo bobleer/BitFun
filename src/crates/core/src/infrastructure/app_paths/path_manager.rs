@@ -60,7 +60,10 @@ fn migrate_legacy_storage_paths() {
                     e
                 );
             } else {
-                info!("Migrated legacy home data directory to {}", new_path.display());
+                info!(
+                    "Migrated legacy home data directory to {}",
+                    new_path.display()
+                );
             }
         }
     }

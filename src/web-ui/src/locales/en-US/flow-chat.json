@@ -593,6 +593,7 @@
       "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted"
     },
     "askUser": {
+      "headerAction": "Ask user",
       "completed": "Completed",
       "submittedWaiting": "Submitted, waiting for processing",
       "submitting": "Submitting...",

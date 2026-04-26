@@ -583,6 +583,7 @@
       "interruptedByRestart": "上次关闭应用时该工具尚未完成，已恢复为中断状态"
     },
     "askUser": {
+      "headerAction": "询问用户",
       "completed": "已完成",
       "submittedWaiting": "已提交，等待处理",
       "submitting": "提交中...",

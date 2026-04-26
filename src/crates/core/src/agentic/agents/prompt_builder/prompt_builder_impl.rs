@@ -45,10 +45,7 @@ pub struct PromptBuilderContext {
 }
 
 impl PromptBuilderContext {
-    pub fn new(
-        workspace_path: impl Into<String>,
-        model_name: Option<String>,
-    ) -> Self {
+    pub fn new(workspace_path: impl Into<String>, model_name: Option<String>) -> Self {
         Self {
             workspace_path: workspace_path.into().replace("\\", "/"),
             model_name,
@@ -213,6 +210,10 @@ impl PromptBuilder {
             }
         }
 
+        if policy.includes(RequestContextSection::ExecutiveCompanionContext) {
+            sections.push(self.build_executive_companion_context());
+        }
+
         if policy.includes(RequestContextSection::RecentWorkspaces) {
             let recent_workspaces = self.build_recent_workspaces_context().await;
             if !recent_workspaces.is_empty() {
@@ -280,6 +281,20 @@ impl PromptBuilder {
         } else {
             Some(sections.join("\n\n"))
         }
+    }
+
+    pub fn build_executive_companion_context(&self) -> String {
+        r#"# Executive Companion Context
+Use this operating context to behave as the top-level Agentic OS assistant, not as a narrow routing bot.
+
+- Current situation: infer the user's immediate situation from the latest message, visible conversation history, active tool/session results, workspace reminders, and loaded memories.
+- User work style: use global memories for durable preferences, collaboration rhythm, and feedback. Do not invent preferences that memory or the current conversation does not support.
+- Project/product vision: use relevant project memories and workspace overviews to understand why the work matters. Verify current code or files before acting on stale memories.
+- Active objective: keep one concise understanding of what the user is trying to accomplish now, then decide whether to think with them, decide, organize, delegate, track, or summarize.
+- Continuity: preserve the feel of a trusted long-term work partner, but only refer to shared history that is actually present in conversation or memory.
+
+"#
+        .to_string()
     }
 
     fn current_memory_target(&self) -> MemoryStoreTarget<'_> {
