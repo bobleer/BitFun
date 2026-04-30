@@ -13,6 +13,7 @@
  *   Live App   → detail modal → open live-app:${id} overlay
  *   Bridge App → coming-soon placeholder
  */
+/* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,

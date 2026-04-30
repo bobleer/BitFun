@@ -7,6 +7,7 @@
  * lock (readonly + rebase), viewport switcher.
  */
 
+/* eslint-disable @typescript-eslint/no-use-before-define */
 import React, {
   useCallback,
   useEffect,
@@ -291,11 +292,13 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
   useEffect(() => {
     if (!manifest) return;
     ensureFileLoaded(manifest.entry);
-  }, [manifest?.id, manifest?.entry, ensureFileLoaded]);
+  }, [manifest, ensureFileLoaded]);
+
+  const entryContent = manifest ? filesCache[manifest.entry] : undefined;
 
   useEffect(() => {
     if (!manifest) return;
-    const entryHtml = filesCache[manifest.entry];
+    const entryHtml = entryContent;
     if (!entryHtml) return;
     const referenced = new Set<string>();
     const addMatch = (re: RegExp) => {
@@ -313,7 +316,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     for (const path of referenced) {
       if (known.has(path)) ensureFileLoaded(path);
     }
-  }, [manifest, filesCache[manifest?.entry || ''], ensureFileLoaded]);
+  }, [manifest, entryContent, ensureFileLoaded]);
 
   // ---------- Picker + Inspector ----------
 
@@ -488,7 +491,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     return () => {
       if (autoSnapshotTimer.current) window.clearTimeout(autoSnapshotTimer.current);
     };
-  }, [manifest?.updated_at, manifest?.id, isAgentLocked, isSnapshotting, effectiveWorkspacePath, t]);
+  }, [manifest, isAgentLocked, isSnapshotting, effectiveWorkspacePath, t]);
 
   // ---------- Snapshot ----------
 

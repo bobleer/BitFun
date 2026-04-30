@@ -6,7 +6,7 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { notificationService } from '@/shared/notification-system';
 import { designTokensAPI } from './designTokensAPI';
 import { useDesignTokensStore, type DesignTokenProposal } from './store/designTokensStore';
-import { canonicalScopeKey, pickString, resolveTokens } from './tokensSchema';
+import { canonicalScopeKey, pickString, resolveTokens, type ResolvedTokens } from './tokensSchema';
 import './DesignTokensStudio.scss';
 
 interface Props {
@@ -151,7 +151,7 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     [scopePath, workspacePath, artifactId]
   );
   const document = useDesignTokensStore((s) => s.byScope[scopeKey]);
-  const proposals = document?.proposals || [];
+  const proposals = useMemo(() => document?.proposals ?? [], [document?.proposals]);
   const [selectedId, setSelectedId] = useState<string>(document?.committed_id || proposals[0]?.id || '');
   const [activePreviewMode, setActivePreviewMode] = useState<'native' | 'inverse'>('native');
 
@@ -203,23 +203,14 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     setDraftError(null);
   };
 
-  if (!draftProposal) {
-    return (
-      <div className="design-tokens-studio design-tokens-studio--empty">
-        <Palette size={28} />
-        <div>{t('designCanvas.studio.empty')}</div>
-      </div>
-    );
-  }
-
-  const colors = (draftProposal.colors || {}) as Record<string, string>;
-  const typography = (draftProposal.typography as Record<string, any>) || {};
+  const colors = (draftProposal?.colors || {}) as Record<string, string>;
+  const typography = (draftProposal?.typography as Record<string, any>) || {};
   const scale = (typography.scale as Record<string, any>) || {};
   const weight = (typography.weight as Record<string, any>) || {};
-  const radius = (draftProposal.radius as Record<string, any>) || {};
-  const shadow = (draftProposal.shadow as Record<string, any>) || {};
-  const spacing = (draftProposal.spacing as Record<string, any>) || {};
-  const motion = (draftProposal.motion as Record<string, any>) || {};
+  const radius = (draftProposal?.radius as Record<string, any>) || {};
+  const shadow = (draftProposal?.shadow as Record<string, any>) || {};
+  const spacing = (draftProposal?.spacing as Record<string, any>) || {};
+  const motion = (draftProposal?.motion as Record<string, any>) || {};
 
   const colorEntries = entries(colors);
   const radiusEntries = entries(radius);
@@ -271,7 +262,7 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
   const paletteIsLight = paletteLuminance > 0.5;
 
   /** Canonical type ramp + xs/xl spacing — same as Proposal card / tokens CSS pipeline. */
-  const resolvedCanonical = useMemo(() => resolveTokens(draftProposal), [draftProposal]);
+  const resolvedCanonical = useMemo<ResolvedTokens>(() => resolveTokens(draftProposal), [draftProposal]);
 
   /** When a section has no authored tokens, show these schema defaults so the block is not visually empty. */
   const defaultTypeRamp = useMemo(
@@ -318,6 +309,15 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
       ],
     [resolvedCanonical]
   );
+
+  if (!draftProposal) {
+    return (
+      <div className="design-tokens-studio design-tokens-studio--empty">
+        <Palette size={28} />
+        <div>{t('designCanvas.studio.empty')}</div>
+      </div>
+    );
+  }
 
   const sharedVars = {
     '--dt-primary': resolve('primary', 'accent', 'brand') || '#161616',
