@@ -745,8 +745,9 @@ const ModelSettingsPage: React.FC = () => {
 
   const modelDiscoverySurface = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : 'local';
   useEffect(() => {
+    const coordinator = modelDiscoveryRef.current;
     resetRemoteModelDiscovery();
-    return () => modelDiscoveryRef.current.reset();
+    return () => coordinator.reset();
   }, [modelDiscoverySurface, resetRemoteModelDiscovery]);
 
   const getOpenCodePlanLabel = useCallback((plan: OpenCodePlan): string => (
